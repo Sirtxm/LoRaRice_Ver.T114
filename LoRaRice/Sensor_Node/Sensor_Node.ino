@@ -6,6 +6,7 @@
   #include <BatteryMonitor.h>
   #include <Adafruit_Sensor.h>
   #include <Adafruit_BME280.h>
+  #include <TinyGPSPlus.h>
   #include "heltec_nrf_lorawan.h"
 
   #define PIN_BAT_ADC     4
@@ -53,6 +54,13 @@
   const int SLEEP_MODE = 2; 
   int state ;
 
+  TinyGPSPlus gps;
+  #define SerialGPS Serial1
+
+  float gpsLat = 0.0;
+  float gpsLng = 0.0;
+  bool gpsHasFix = false;
+
   unsigned long lastSensorReadTime = 0;
   const unsigned long sensorReadInterval = 15000;
   uint32_t receivedSleepDuration = 15000;
@@ -62,18 +70,32 @@
   Adafruit_BME280 bme;
 
   static void prepareTxFrame(uint8_t port) {
-    int distance = sensor.readDistance();
-    float temperature = bme.readTemperature();
-    float humidity = bme.readHumidity();
+  int distance = sensor.readDistance();
+  float temperature = bme.readTemperature();
+  float humidity = bme.readHumidity();
 
-    appDataSize = 6;
-    appData[0] = (distance >> 8) & 0xFF;
-    appData[1] = distance & 0xFF;
-    appData[2] = (int)temperature;
-    appData[3] = ((int)(temperature * 100)) % 100;
-    appData[4] = (int)humidity;
-    appData[5] = ((int)(humidity * 100)) % 100;
-  }
+  int32_t lat_enc = gpsLat * 1e6;  // encode to int32
+  int32_t lng_enc = gpsLng * 1e6;
+
+  appDataSize = 14;
+  appData[0] = (distance >> 8) & 0xFF;
+  appData[1] = distance & 0xFF;
+
+  appData[2] = (int)temperature;
+  appData[3] = ((int)(temperature * 100)) % 100;
+  appData[4] = (int)humidity;
+  appData[5] = ((int)(humidity * 100)) % 100;
+
+  appData[6] = (lat_enc >> 24) & 0xFF;
+  appData[7] = (lat_enc >> 16) & 0xFF;
+  appData[8] = (lat_enc >> 8) & 0xFF;
+  appData[9] = lat_enc & 0xFF;
+
+  appData[10] = (lng_enc >> 24) & 0xFF;
+  appData[11] = (lng_enc >> 16) & 0xFF;
+  appData[12] = (lng_enc >> 8) & 0xFF;
+  appData[13] = lng_enc & 0xFF;
+}
 
   void setupRtcWakeup(uint32_t ms)
   {
@@ -101,14 +123,14 @@
     Serial.println("📥 Downlink received!");
 
     if (mcpsIndication->BufferSize >= 2) {
-      receivedSleepDuration = ((uint16_t)mcpsIndication->Buffer[0] << 8) |
-                              mcpsIndication->Buffer[1];
+      receivedSleepDuration = ((uint16_t)mcpsIndication->Buffer[0] << 8) | mcpsIndication->Buffer[1];
       Serial.printf("⏱️ New sleep duration from TTN: %lu ms\n", receivedSleepDuration);
     }
   }
 
   void setup() {
     Serial.begin(115200);
+    SerialGPS.begin(9600);
     Wire.begin();
     if (!bme.begin(0x76)) {
     Serial.println("Could not find a valid BME280 sensor, check wiring!");
@@ -134,6 +156,24 @@
         lastSensorReadTime = currentTime;
 
       if(state == READ_SENSOR){
+        while (SerialGPS.available()) {
+        gps.encode(SerialGPS.read());
+      }
+
+      if (gps.location.isUpdated()) {
+        gpsLat = gps.location.lat();
+        gpsLng = gps.location.lng();
+        gpsHasFix = true;
+
+        Serial.print("📍 Lat: ");
+        Serial.println(gpsLat, 6);
+        Serial.print("📍 Lng: ");
+        Serial.println(gpsLng, 6);
+      } else {
+        gpsHasFix = false;
+        Serial.println("⚠️ No GPS fix yet.");
+      }
+
         int distance = sensor.readDistance();
         if (distance > 0){
           Serial.print("Distance: ");
@@ -164,7 +204,6 @@
     else if(state== SLEEP_MODE){
       enterDeepSleep();
       state = READ_SENSOR;
-
     }
 
   }
