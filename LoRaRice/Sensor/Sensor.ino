@@ -24,6 +24,16 @@ enum {
 };
 int state = READ_SENSOR;
 
+// ===== Timing Configurations =====
+unsigned long lastSensorTime = 0;
+unsigned long sensorInterval = 2000; // ms
+
+unsigned long lastLoraTime = 0;
+unsigned long loraInterval = 1000;
+
+unsigned long lastSleepTime = 0;
+unsigned long sleepInterval = 1000;
+
 void setup() {
   Serial.begin(115200);
   while (!Serial) delay(10);
@@ -60,44 +70,43 @@ void setup() {
 }
 
 void loop() {
-  Serial.printf("System State: %d\n", state);
+  unsigned long now = millis();
 
   if (state == READ_SENSOR) {
-    Serial.println("Reading sensors...");
+    if (now - lastSensorTime >= sensorInterval) {
+      lastSensorTime = now;
+      Serial.println("Reading sensors...");
 
-    // VL53L1X: Distance
-    int distance = sensor.readDistance();
-    if (distance > 0) {
-      Serial.printf("Distance: %d mm\n", distance);
-    } else {
-      Serial.println("[WARN] Distance read failed or too close.");
+      int distance = sensor.readDistance();
+      if (distance > 0) {
+        Serial.printf("Distance: %d mm\n", distance);
+      } else {
+        Serial.println("[WARN] Distance read failed or too close.");
+      }
+
+      float temperature = bme.readTemperature();
+      float humidity = bme.readHumidity();
+      Serial.printf("Temp: %.2f °C, Humidity: %.2f %%\n", temperature, humidity);
+
+      uint16_t mv = battery.readMillivolts();
+      Serial.printf("Battery Voltage: %d mV\n", mv);
+
+      Serial.print("Sensor reading complete.\n");
+      state = LORA_SEND_SENSOR;
     }
 
-    // BME280: Temp + Humidity
-    float temperature = bme.readTemperature();
-    float humidity = bme.readHumidity();
-
-    Serial.printf("Temp: %.2f °C, Humidity: %.2f %%\n", temperature, humidity);
-
-    // Battery Voltage
-    uint16_t mv = battery.readMillivolts();
-    Serial.printf("Battery Voltage: %d mV\n", mv);
-
-    Serial.println("Sensor reading complete.\n");
-    delay(1000);
-
-    state = LORA_SEND_SENSOR;
-
   } else if (state == LORA_SEND_SENSOR) {
-    Serial.println("Preparing LoRa payload (not implemented yet).");
-    delay(500);
-    state = SLEEP_MODE;
+    if (now - lastLoraTime >= loraInterval) {
+      lastLoraTime = now;
+      Serial.println("Preparing LoRa payload.");
+      state = SLEEP_MODE;
+    }
 
   } else if (state == SLEEP_MODE) {
-    Serial.println("Entering (simulated) sleep mode...");
-    delay(1000);
-    state = READ_SENSOR;
+    if (now - lastSleepTime >= sleepInterval) {
+      lastSleepTime = now;
+      Serial.println("Entering sleep mode...");
+      state = READ_SENSOR;
+    }
   }
-
-  delay(100);
 }
