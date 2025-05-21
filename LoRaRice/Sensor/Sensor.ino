@@ -3,7 +3,11 @@
 #include <BatteryMonitor.h>
 #include <Adafruit_BME280.h>
 #include <Wire.h>
-#include "MyVL53L1X.h"
+#include "Adafruit_VL53L1X.h"
+
+// ===== Define Value =====
+double adjustedDistance = 0;
+double distance = 0;
 
 // ===== Pin Definitions =====
 #define PIN_BAT_ADC      4    // GPIO4
@@ -13,8 +17,8 @@
 // ===== Global Instances =====
 TwoWire *wi = &Wire;
 Adafruit_BME280 bme;
-MyVL53L1X sensor(30, 28);
 BatteryMonitor battery(PIN_BAT_ADC, PIN_BAT_ADC_CTL, MY_BAT_AMPLIFY);
+Adafruit_VL53L1X vl53 = Adafruit_VL53L1X();
 
 // ===== State Machine =====
 enum {
@@ -55,9 +59,18 @@ void setup() {
 
   // ===== Init VL53L1X =====
   Serial.println("Initializing VL53L1X...");
-  if (!sensor.begin()) {
-    Serial.println("[ERROR] VL53L1X initialization failed!");
-    while (1) delay(100);
+
+   if (!vl53.begin(0x29, wi)) {
+    Serial.print(F("Error on init of VL sensor: "));
+    Serial.println(vl53.vl_status);
+    while (1) delay(10);
+  }
+  Serial.println(F("VL53L1X sensor OK!"));
+
+   if (vl53.VL53L1X_SetROI(5,5) == 0) {   //(ROIcenter,ROIsize)
+    Serial.println(F("ROI successed"));
+  } else {
+    Serial.println(F("ตั้งค่า ROI ล้มเหลว"));
   }
   Serial.println("VL53L1X ready.");
 
@@ -77,11 +90,14 @@ void loop() {
       lastSensorTime = now;
       Serial.println("Reading sensors...");
 
-      int distance = sensor.readDistance();
-      if (distance > 0) {
-        Serial.printf("Distance: %d mm\n", distance);
-      } else {
-        Serial.println("[WARN] Distance read failed or too close.");
+      if (vl53.dataReady()) { 
+        distance = vl53.distance() / 10.0;
+        adjustedDistance = 50.0 - distance;
+      if (distance == -1) {
+        // something went wrong!
+        Serial.print(F("Couldn't get distance: "));
+        Serial.println(vl53.vl_status);
+        return;
       }
 
       float temperature = bme.readTemperature();
@@ -93,8 +109,8 @@ void loop() {
 
       Serial.print("Sensor reading complete.\n");
       state = LORA_SEND_SENSOR;
+      }
     }
-
   } else if (state == LORA_SEND_SENSOR) {
     if (now - lastLoraTime >= loraInterval) {
       lastLoraTime = now;
