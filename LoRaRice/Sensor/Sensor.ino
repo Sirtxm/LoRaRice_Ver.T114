@@ -102,12 +102,10 @@ void loop() {
       }
 
       // ==== BME ====
-      if (sensor == BME){
       float temperatureBME = bme.readTemperature();
       float humidityBME = bme.readHumidity();
       Serial.println("BME reading...");
       Serial.printf("Temp: %.2f °C, Humidity: %.2f %%\n", temperatureBME, humidityBME);
-      }else if(sensor == SHT){
     
       // ==== Battery ====
       uint16_t mv = battery.readMillivolts();
