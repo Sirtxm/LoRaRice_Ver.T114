@@ -1,111 +1,147 @@
 #include <Arduino.h>
+#include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
 #include <Wire.h>
 #include <BatteryMonitor.h>
+#include "heltec_nrf_lorawan.h"
+
+// ===== LoRaWAN OTAA Credentials =====
+uint8_t devEui[] = { 0x22, 0x32, 0x33, 0x00, 0x00, 0x99, 0xaa, 0x04 };
+uint8_t appEui[] = { 0x70, 0xB3, 0xD5, 0x7E, 0xF0, 0x00, 0x00, 0x00 };
+uint8_t appKey[] = { 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88 };
+
+// ===== LoRaWAN Settings =====
+LoRaMacRegion_t loraWanRegion = LORAMAC_REGION_AS923;
+DeviceClass_t loraWanClass = CLASS_A;
+bool overTheAirActivation = true;
+bool loraWanAdr = true;
+bool isTxConfirmed = false;
+uint8_t appPort = 2;
+uint8_t confirmedNbTrials = 1;
+uint32_t appTxDutyCycle = 30000;
+#define APP_TX_DUTYCYCLE_RND 500
 
 // ===== Pin Definitions =====
 #define PIN_BAT_ADC     4
 #define PIN_BAT_ADC_CTL 6
 #define MY_BAT_AMPLIFY  4.9
-
-// ===== PIN LED =============
 #define LED_AUTO_ON     8
-#define LED_AUTO_OFF    7  
+#define LED_AUTO_OFF    7
 #define RELAY_TRICK_ON  44
-#define RELAY_TRICK_OFF  46
-   
+#define RELAY_TRICK_OFF 46
+
 // ===== Global Instances =====
 TwoWire *wi = &Wire;
 Adafruit_BME280 bme;
 BatteryMonitor battery(PIN_BAT_ADC, PIN_BAT_ADC_CTL, MY_BAT_AMPLIFY);
 
-// ===== State Machine =====
-enum {
-  READ_SENSOR = 0,
-  LORA_MODE   = 1,
-  ON_PUMP   = 2,
-  OFF_PUMP  = 3
-};
+// ===== Pump Control Variables =====
+bool pumpOnCommand = false;   // รับค่าจาก Downlink
 
-int state = READ_SENSOR;
-unsigned long pumpStartTime = 0;
-bool pumpActive = false;
+// ===== LoraWAN Payload =====
+void prepareTxFrame(uint8_t port) {
+  appDataSize = 6;
+
+  int16_t temp = bme.readTemperature() * 100;
+  uint16_t humi = bme.readHumidity() * 100;
+  uint16_t batt = battery.readMillivolts();
+
+  appData[0] = (temp >> 8) & 0xFF;
+  appData[1] = temp & 0xFF;
+  appData[2] = (humi >> 8) & 0xFF;
+  appData[3] = humi & 0xFF;
+  appData[4] = (batt >> 8) & 0xFF;
+  appData[5] = batt & 0xFF;
+}
+
+// ===== Downlink Control =====
+void downLinkDataHandle(McpsIndication_t *mcpsIndication)
+{
+  if(mcpsIndication->BufferSize >= 1) {
+    uint8_t cmd = mcpsIndication->Buffer[0];
+    switch(cmd) {
+      case 0x00:
+        Serial.println("Command: Turn PUMP OFF");
+        pumpOnCommand = false;
+        break;
+      case 0x01:
+        Serial.println("Command: Turn PUMP ON");
+        pumpOnCommand = true;
+        break;
+      default:
+        Serial.printf("Unknown downlink command: 0x%02X\n", cmd);
+        break;
+    }
+  }
+}
+
+// ===== Pump Control Logic =====
+void controlPump() {
+  if (pumpOnCommand) {
+    digitalWrite(LED_AUTO_ON, HIGH);
+    digitalWrite(RELAY_TRICK_ON, HIGH);
+    digitalWrite(LED_AUTO_OFF, LOW);
+    digitalWrite(RELAY_TRICK_OFF, LOW);
+  } else {
+    digitalWrite(LED_AUTO_OFF, HIGH);
+    digitalWrite(RELAY_TRICK_OFF, HIGH);
+    digitalWrite(LED_AUTO_ON, LOW);
+    digitalWrite(RELAY_TRICK_ON, LOW);
+  }
+}
 
 void setup() {
-  Serial.begin(115200);
-  while (!Serial) delay(10);
-  Serial.println("Booting Mesh Node T114...");
+  boardInit(LORA_DEBUG_ENABLE, LORA_DEBUG_SERIAL_NUM, 115200);
+  debug_printf("Booting Mesh Node Pump Controller...\n");
 
   pinMode(LED_AUTO_ON, OUTPUT);
   pinMode(LED_AUTO_OFF, OUTPUT);
   pinMode(RELAY_TRICK_ON, OUTPUT);
   pinMode(RELAY_TRICK_OFF, OUTPUT);
 
-  // ===== Init I2C Bus =====
-  Serial.println("Setting up I2C...");
   wi->setPins(30, 28);
   wi->begin();
-  Serial.println("I2C started on SDA: 30, SCL: 28");
-
-    // ===== Init BME280 =====
-  Serial.println("Initializing BME280...");
-  if (!bme.begin(0x76, wi)) {
-    Serial.println("[ERROR] BME280 not found at 0x76. Check wiring or address jumper!");
-    while (1) delay(100);
-  }
-  Serial.println("BME280 initialized successfully.");
-
-    // ===== Init Battery Monitor =====
-  Serial.println("Initializing battery monitor...");
+  bme.begin(0x76, wi);
   battery.begin();
-  Serial.println("Battery monitor initialized.");
 
-  Serial.println("System initialization complete.\n");
+  deviceState = DEVICE_STATE_INIT;
 }
 
 void loop() {
-  if (state == READ_SENSOR) {
-    // ==== BME ====
-    float temperatureBME = bme.readTemperature();
-    float humidityBME = bme.readHumidity();
-    Serial.println("BME reading...");
-    Serial.printf("Temp: %.2f °C, Humidity: %.2f %%\n", temperatureBME, humidityBME);
-    
-    // ==== Battery ====
-    uint16_t mv = battery.readMillivolts();
-    Serial.printf("Battery Voltage: %d mV\n", mv);
-    Serial.print("Sensor reading complete.\n");
-    state = LORA_MODE;
-  }
-  else if (state == LORA_MODE){
-    
-  }
-  else if (state == ON_PUMP){
-    if (!pumpActive) {
-      digitalWrite(LED_AUTO_ON, HIGH);
-      digitalWrite(RELAY_TRICK_ON, HIGH);
-      pumpStartTime = millis();  
-      pumpActive = true;
-    }
-    else if (millis() - pumpStartTime >= 1000) { 
-      digitalWrite(LED_AUTO_ON, LOW);
-      digitalWrite(RELAY_TRICK_ON, LOW);
-      pumpActive = false;
-      state = READ_SENSOR;
-    }
-  }
-  else if (state == OFF_PUMP){
-    if (!pumpActive) {
-      digitalWrite(LED_AUTO_OFF, HIGH);
-      digitalWrite(RELAY_TRICK_OFF, HIGH);
-      pumpStartTime = millis();
-      pumpActive = true;
-    }
-    else if (millis() - pumpStartTime >= 1000) {
-      digitalWrite(LED_AUTO_OFF, LOW);
-      digitalWrite(RELAY_TRICK_OFF, LOW);
-      pumpActive = false;
-      state = READ_SENSOR;
-    }
+  static unsigned long lastTxTime = 0;
+  unsigned long now = millis();
+
+  switch (deviceState) {
+    case DEVICE_STATE_INIT:
+      LoRaWAN.init(loraWanClass, loraWanRegion);
+      LoRaWAN.setDefaultDR(3);
+      deviceState = DEVICE_STATE_JOIN;
+      break;
+
+    case DEVICE_STATE_JOIN:
+      LoRaWAN.join();
+      break;
+
+    case DEVICE_STATE_SEND:
+      prepareTxFrame(appPort);
+      LoRaWAN.send();
+      controlPump();  // สั่งปั๊มทุกครั้งหลังส่ง
+      deviceState = DEVICE_STATE_CYCLE;
+      break;
+
+    case DEVICE_STATE_CYCLE:
+      lastTxTime = now;
+      txDutyCycleTime = appTxDutyCycle + randr(-APP_TX_DUTYCYCLE_RND, APP_TX_DUTYCYCLE_RND);
+      LoRaWAN.cycle(txDutyCycleTime);
+      deviceState = DEVICE_STATE_SLEEP;
+      break;
+
+    case DEVICE_STATE_SLEEP:
+      LoRaWAN.sleep(loraWanClass);
+      break;
+
+    default:
+      deviceState = DEVICE_STATE_INIT;
+      break;
   }
 }
