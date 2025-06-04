@@ -12,7 +12,7 @@ double distance = 0;
 // ===== Pin Definitions =====
 #define PIN_BAT_ADC      4    // GPIO4
 #define PIN_BAT_ADC_CTL  6    // GPIO6
-#define MY_BAT_AMPLIFY   2.0
+#define MY_BAT_AMPLIFY   4.9
 
 // ===== Global Instances =====
 TwoWire *wi = &Wire;
@@ -26,6 +26,7 @@ enum {
   LORA_SEND_SENSOR = 1,
   SLEEP_MODE = 2
 };
+
 int state = READ_SENSOR;
 
 // ===== Timing Configurations =====
@@ -70,7 +71,7 @@ void setup() {
    if (vl53.VL53L1X_SetROI(5,5) == 0) {   //(ROIcenter,ROIsize)
     Serial.println(F("ROI successed"));
   } else {
-    Serial.println(F("ตั้งค่า ROI ล้มเหลว"));
+    Serial.println(F("ROI Failure"));
   }
   Serial.println("VL53L1X ready.");
 
@@ -84,7 +85,7 @@ void setup() {
 
 void loop() {
   unsigned long now = millis();
-
+ 
   if (state == READ_SENSOR) {
     if (now - lastSensorTime >= sensorInterval) {
       lastSensorTime = now;
@@ -100,10 +101,15 @@ void loop() {
         return;
       }
 
-      float temperature = bme.readTemperature();
-      float humidity = bme.readHumidity();
-      Serial.printf("Temp: %.2f °C, Humidity: %.2f %%\n", temperature, humidity);
-
+      // ==== BME ====
+      if (sensor == BME){
+      float temperatureBME = bme.readTemperature();
+      float humidityBME = bme.readHumidity();
+      Serial.println("BME reading...");
+      Serial.printf("Temp: %.2f °C, Humidity: %.2f %%\n", temperatureBME, humidityBME);
+      }else if(sensor == SHT){
+    
+      // ==== Battery ====
       uint16_t mv = battery.readMillivolts();
       Serial.printf("Battery Voltage: %d mV\n", mv);
 
