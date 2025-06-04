@@ -7,6 +7,7 @@
 #define PIN_BAT_ADC     4
 #define PIN_BAT_ADC_CTL 6
 #define MY_BAT_AMPLIFY  4.9
+
 // ===== PIN LED =============
 #define LED_AUTO_ON     8
 #define LED_AUTO_OFF    7  
@@ -27,6 +28,8 @@ enum {
 };
 
 int state = READ_SENSOR;
+unsigned long pumpStartTime = 0;
+bool pumpActive = false;
 
 void setup() {
   Serial.begin(115200);
@@ -78,20 +81,31 @@ void loop() {
     
   }
   else if (state == ON_PUMP){
-    digitalWrite(LED_AUTO_ON, HIGH);
-    digitalWrite(RELAY_TRICK_ON, HIGH);
-    delay(1000);
-    digitalWrite(LED_AUTO_ON, LOW);
-    digitalWrite(RELAY_TRICK_ON, LOW);
-    state = READ_SENSOR;
+    if (!pumpActive) {
+      digitalWrite(LED_AUTO_ON, HIGH);
+      digitalWrite(RELAY_TRICK_ON, HIGH);
+      pumpStartTime = millis();  
+      pumpActive = true;
+    }
+    else if (millis() - pumpStartTime >= 1000) { 
+      digitalWrite(LED_AUTO_ON, LOW);
+      digitalWrite(RELAY_TRICK_ON, LOW);
+      pumpActive = false;
+      state = READ_SENSOR;
+    }
   }
   else if (state == OFF_PUMP){
-    digitalWrite(LED_AUTO_OFF, HIGH);
-    digitalWrite(RELAY_TRICK_OFF, HIGH);
-    delay(1000);
-    digitalWrite(LED_AUTO_OFF, LOW);
-    digitalWrite(RELAY_TRICK_OFF, LOW);
-    state = READ_SENSOR;
+    if (!pumpActive) {
+      digitalWrite(LED_AUTO_OFF, HIGH);
+      digitalWrite(RELAY_TRICK_OFF, HIGH);
+      pumpStartTime = millis();
+      pumpActive = true;
+    }
+    else if (millis() - pumpStartTime >= 1000) {
+      digitalWrite(LED_AUTO_OFF, LOW);
+      digitalWrite(RELAY_TRICK_OFF, LOW);
+      pumpActive = false;
+      state = READ_SENSOR;
+    }
   }
-
 }
