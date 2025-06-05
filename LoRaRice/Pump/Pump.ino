@@ -51,6 +51,9 @@ enum PumpState{
 PumpState pumpState;
 uint8_t pumpCmd;
 
+// ===== TIME VARIABLES =====
+unsigned long relayActionStartTime = 0;
+bool relayActionPending = false;
 
 // ===== LoraWAN Payload =====
 void prepareTxFrame(uint8_t port) {
@@ -70,29 +73,43 @@ void prepareTxFrame(uint8_t port) {
 
 // ===== Pump Control Logic =====
 void controlPump(PumpState state, uint8_t cmd) {
-  if (state == STATE_PUMP_AUTO && cmd == 0x01) {
-    digitalWrite(LED_AUTO_ON, LOW);
-    digitalWrite(RELAY_TRICK_ON, LOW);
-    delay(1000);
-    digitalWrite(LED_AUTO_ON, HIGH);
-    digitalWrite(RELAY_TRICK_ON, HIGH);
-  } 
-  else if(state == STATE_PUMP_AUTO && cmd == 0x00){
-    digitalWrite(LED_AUTO_OFF, LOW);
-    digitalWrite(RELAY_TRICK_OFF, LOW);
-    delay(1000);
-    digitalWrite(LED_AUTO_OFF, HIGH);
-    digitalWrite(RELAY_TRICK_OFF, HIGH);
+  if (!relayActionPending) {
+    if (state == STATE_PUMP_AUTO) {
+      if (cmd == 0x01) {
+        digitalWrite(LED_AUTO_ON, LOW);
+        digitalWrite(RELAY_TRICK_ON, LOW);
+      } else {
+        digitalWrite(LED_AUTO_OFF, LOW);
+        digitalWrite(RELAY_TRICK_OFF, LOW);
+      }
+    } else if (state == STATE_PUMP_MANUAL) {
+      if (cmd == 0x01) {
+        digitalWrite(RELAY_TRICK_ON, LOW);
+      } else {
+        digitalWrite(RELAY_TRICK_OFF, LOW);
+      }
+    }
+    relayActionStartTime = millis();
+    relayActionPending = true;
   }
-  else if(state == STATE_PUMP_MANUAL && cmd == 0x01){
-    digitalWrite(RELAY_TRICK_ON, LOW);
-    delay(1000);
-    digitalWrite(RELAY_TRICK_ON, HIGH);
-  }
-  else if(state == STATE_PUMP_MANUAL && cmd == 0x00){
-    digitalWrite(RELAY_TRICK_OFF, LOW);
-    delay(1000);
-    digitalWrite(RELAY_TRICK_OFF, HIGH);
+
+  if (relayActionPending && (millis() - relayActionStartTime >= 1000)) {
+    if (state == STATE_PUMP_AUTO) {
+      if (cmd == 0x01) {
+        digitalWrite(LED_AUTO_ON, HIGH);
+        digitalWrite(RELAY_TRICK_ON, HIGH);
+      } else {
+        digitalWrite(LED_AUTO_OFF, HIGH);
+        digitalWrite(RELAY_TRICK_OFF, HIGH);
+      }
+    } else if (state == STATE_PUMP_MANUAL) {
+      if (cmd == 0x01) {
+        digitalWrite(RELAY_TRICK_ON, HIGH);
+      } else {
+        digitalWrite(RELAY_TRICK_OFF, HIGH);
+      }
+    }
+    relayActionPending = false;
   }
 }
 
