@@ -6,15 +6,16 @@
 #include "Adafruit_VL53L1X.h"
 #include "heltec_nrf_lorawan.h"
 
+
 // ===== LoRaWAN OTAA Credentials =====
-uint8_t devEui[] = { 0x22, 0x32, 0x33, 0x00, 0x00, 0x99, 0xaa, 0x04 };
-uint8_t appEui[] = { 0x70, 0xB3, 0xD5, 0x7E, 0xF0, 0x00, 0x00, 0x00 };
-uint8_t appKey[] = { 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88 };
+uint8_t devEui[] = {0x70, 0xB3, 0xD5, 0x7E, 0xD8, 0x00, 0x41, 0x3D};
+uint8_t appEui[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01};
+uint8_t appKey[] = {0xDE, 0x67, 0x90, 0x7C, 0x63, 0x5C, 0x79, 0x33, 0xA4, 0xD3, 0xC4, 0x4F, 0x12, 0x56, 0x0C, 0x50};
 
 /* ABP para*/
-uint8_t nwkSKey[] = { 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88 };
-uint8_t appSKey[] = { 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88 };
-uint32_t devAddr = (uint32_t)0x007e6ae4;
+uint8_t nwkSKey[] = {0x15, 0xb1, 0xd0, 0xef, 0xa4, 0x63, 0xdf, 0xbe, 0x3d, 0x11, 0x18, 0x1e, 0x1e, 0xc7, 0xda, 0x85};
+uint8_t appSKey[] = {0xd7, 0x2c, 0x78, 0x75, 0x8c, 0xdc, 0xca, 0xbf, 0x55, 0xee, 0x4a, 0x77, 0x8d, 0x16, 0xef, 0x67};
+uint32_t devAddr = (uint32_t)0x007e6ae1;
 
 // ===== LoRaWAN Settings =====
 LoRaMacRegion_t loraWanRegion = LORAMAC_REGION_AS923;  
@@ -55,52 +56,6 @@ Adafruit_VL53L1X vl53 = Adafruit_VL53L1X();
 void prepareTxFrame(uint8_t port) {
   appDataSize = 8;
 
-  int16_t temp = temperatureBME * 100;
-  uint16_t humi = humidityBME * 100;
-  uint16_t dist = distanceVL * 10;
-  uint16_t batt = batteryVoltage;
-
-  appData[0] = (temp >> 8) & 0xFF;
-  appData[1] = temp & 0xFF;
-  appData[2] = (humi >> 8) & 0xFF;
-  appData[3] = humi & 0xFF;
-  appData[4] = (dist >> 8) & 0xFF;
-  appData[5] = dist & 0xFF;
-  appData[6] = (batt >> 8) & 0xFF;
-  appData[7] = batt & 0xFF;
-  
-  Serial.println("Payload prepared for LoRaWAN:");
-  Serial.printf("Temp: %d, Humi: %d, Dist: %d, Batt: %d\n", temp, humi, dist, batt);
-}
-
-void downLinkDataHandle(McpsIndication_t *mcpsIndication)
-{
-  Serial.printf("Downlink received | Port: %d | Size: %d\n", mcpsIndication->Port, mcpsIndication->BufferSize);
-
-  Serial.print("Payload: ");
-  for(uint8_t i = 0; i < mcpsIndication->BufferSize; i++) {
-    Serial.printf("%02X ", mcpsIndication->Buffer[i]);
-  }
-  Serial.println();
-
-  if(mcpsIndication->BufferSize >= 1) {
-    uint8_t cmd = mcpsIndication->Buffer[0];
-  switch (cmd) {
-        case 0x00:
-          Serial.println("Command: Enter Debug Mode");
-          break;
-        case 0x01:
-          Serial.println("Command: Enter Normal Mode");
-          break;
-        default:
-          Serial.printf("Unknown command: 0x%02X\n", cmd);
-          break;
-      }
-  }
-}
-
-
-void readSensors() {
   Serial.println("Reading sensors...");
 
   // VL53L1X
@@ -132,7 +87,87 @@ void readSensors() {
   Serial.printf("Battery Voltage: %d mV\n", batteryVoltage);
 
   Serial.println("Sensor reading complete.");
+
+  // ===== Move encoding AFTER sensor update =====
+  int16_t temp = temperatureBME * 100;
+  uint16_t humi = humidityBME * 100;
+  uint16_t dist = distanceVL * 10;
+  uint16_t batt = batteryVoltage;
+
+  appData[0] = (temp >> 8) & 0xFF;
+  appData[1] = temp & 0xFF;
+  appData[2] = (humi >> 8) & 0xFF;
+  appData[3] = humi & 0xFF;
+  appData[4] = (dist >> 8) & 0xFF;
+  appData[5] = dist & 0xFF;
+  appData[6] = (batt >> 8) & 0xFF;
+  appData[7] = batt & 0xFF;
+
+  Serial.println("Payload prepared for LoRaWAN:");
+  Serial.printf("Temp: %d, Humi: %d, Dist: %d, Batt: %d\n", temp, humi, dist, batt);
 }
+
+
+void downLinkDataHandle(McpsIndication_t *mcpsIndication)
+{
+  Serial.printf("Downlink received | Port: %d | Size: %d\n", mcpsIndication->Port, mcpsIndication->BufferSize);
+
+  Serial.print("Payload: ");
+  for(uint8_t i = 0; i < mcpsIndication->BufferSize; i++) {
+    Serial.printf("%02X ", mcpsIndication->Buffer[i]);
+  }
+  Serial.println();
+
+  if(mcpsIndication->BufferSize >= 1) {
+    uint8_t cmd = mcpsIndication->Buffer[0];
+  switch (cmd) {
+        case 0x00:
+          Serial.println("Command: Enter Debug Mode");
+          break;
+        case 0x01:
+          Serial.println("Command: Enter Normal Mode");
+          break;
+        default:
+          Serial.printf("Unknown command: 0x%02X\n", cmd);
+          break;
+      }
+  }
+}
+
+
+// void readSensors() {
+//   Serial.println("Reading sensors...");
+
+//   // VL53L1X
+//   unsigned long startTime = millis();
+//   while (!vl53.dataReady()) {
+//     if (millis() - startTime > 500) {
+//       Serial.println("VL53L1X Timeout.");
+//       return;
+//     }
+//   }
+
+//   distance = vl53.distance() / 10.0;
+//   if (distance == -1) {
+//     Serial.print(F("Couldn't get distance: "));
+//     Serial.println(vl53.vl_status);
+//     return;
+//   }
+
+//   adjustedDistance = 50.0 - distance;
+//   distanceVL = adjustedDistance;
+
+//   // BME280
+//   temperatureBME = bme.readTemperature();
+//   humidityBME = bme.readHumidity();
+//   Serial.printf("Temp: %.2f °C, Humidity: %.2f %%\n", temperatureBME, humidityBME);
+
+//   // Battery
+//   batteryVoltage = battery.readMillivolts();
+//   Serial.printf("Battery Voltage: %d mV\n", batteryVoltage);
+
+//   Serial.println("Sensor reading complete.");
+// }
 
 void setup() {
   boardInit(LORA_DEBUG_ENABLE, LORA_DEBUG_SERIAL_NUM, 115200);
@@ -194,7 +229,7 @@ void loop() {
       break;
 
     case DEVICE_STATE_SEND:
-      readSensors();
+      // readSensors();
       prepareTxFrame(appPort);
       LoRaWAN.send();
       deviceState = DEVICE_STATE_CYCLE;
