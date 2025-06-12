@@ -5,7 +5,8 @@
 #include <Wire.h>
 #include "Adafruit_VL53L1X.h"
 #include "heltec_nrf_lorawan.h"
-
+#include <SoftwareSerial.h>
+#include <TinyGPS++.h>
 
 // ===== LoRaWAN OTAA Credentials =====
 uint8_t devEui[] = {0x70, 0xB3, 0xD5, 0x7E, 0xD8, 0x00, 0x41, 0x3D};
@@ -40,21 +41,27 @@ double distance = 0;
 #define PIN_BAT_ADC_CTL  6    // GPIO6
 #define MY_BAT_AMPLIFY   4.9
 
+#define GPS_RX 9   // GPS TX ต่อเข้าขานี้
+#define GPS_TX 10  // ไม่ได้ใช้ก็ได้
+
 // Global variables
 float temperatureBME = 0;
 float humidityBME = 0;
 float distanceVL = 0;
 uint16_t batteryVoltage = 0;
+double latitude = 0;
+double longitude = 0;
 
 // ===== Global Instances =====
 TwoWire *wi = &Wire;
 Adafruit_BME280 bme;
 BatteryMonitor battery(PIN_BAT_ADC, PIN_BAT_ADC_CTL, MY_BAT_AMPLIFY);
 Adafruit_VL53L1X vl53 = Adafruit_VL53L1X();
-
+SoftwareSerial gpsSerial(GPS_RX, GPS_TX);
+TinyGPSPlus gps;
 
 void prepareTxFrame(uint8_t port) {
-  appDataSize = 8;
+  appDataSize = 16;
 
   Serial.println("Reading sensors...");
 
@@ -86,6 +93,26 @@ void prepareTxFrame(uint8_t port) {
   batteryVoltage = battery.readMillivolts();
   Serial.printf("Battery Voltage: %d mV\n", batteryVoltage);
 
+  // GPS 
+  unsigned long gpsStart = millis();
+  bool gpsValid = false;
+  while (millis() - gpsStart < 3000) {
+    while (gpsSerial.available()) {
+      gps.encode(gpsSerial.read());
+    }
+    if (gps.location.isUpdated() && gps.location.isValid()) {
+      latitude = gps.location.lat();
+      longitude = gps.location.lng();
+      gpsValid = true;
+      break;
+    }
+  }
+
+  if (!gpsValid) {
+    Serial.println("GPS not valid, skipping lat/lon encode.");
+    latitude = 0;
+    longitude = 0;
+  }
   Serial.println("Sensor reading complete.");
 
   // ===== Move encoding AFTER sensor update =====
@@ -93,6 +120,8 @@ void prepareTxFrame(uint8_t port) {
   uint16_t humi = humidityBME * 100;
   uint16_t dist = distanceVL * 10;
   uint16_t batt = batteryVoltage;
+  int32_t lat = latitude * 1e6;
+  int32_t lon = longitude * 1e6;
 
   appData[0] = (temp >> 8) & 0xFF;
   appData[1] = temp & 0xFF;
@@ -103,8 +132,21 @@ void prepareTxFrame(uint8_t port) {
   appData[6] = (batt >> 8) & 0xFF;
   appData[7] = batt & 0xFF;
 
+  appData[8]  = (lat >> 24) & 0xFF;
+  appData[9]  = (lat >> 16) & 0xFF;
+  appData[10] = (lat >> 8) & 0xFF;
+  appData[11] = lat & 0xFF;
+
+  appData[12] = (lon >> 24) & 0xFF;
+  appData[13] = (lon >> 16) & 0xFF;
+  appData[14] = (lon >> 8) & 0xFF;
+  appData[15] = lon & 0xFF;
   Serial.println("Payload prepared for LoRaWAN:");
-  Serial.printf("Temp: %d, Humi: %d, Dist: %d, Batt: %d\n", temp, humi, dist, batt);
+  Serial.printf("Temp: %d, Humi: %d, Dist: %d, Batt: %d, Lat: %.6f, Lon: %.6f\n",
+              temp, humi, dist, batt,
+              latitude, longitude);
+
+
 }
 
 
@@ -135,43 +177,12 @@ void downLinkDataHandle(McpsIndication_t *mcpsIndication)
 }
 
 
-// void readSensors() {
-//   Serial.println("Reading sensors...");
-
-//   // VL53L1X
-//   unsigned long startTime = millis();
-//   while (!vl53.dataReady()) {
-//     if (millis() - startTime > 500) {
-//       Serial.println("VL53L1X Timeout.");
-//       return;
-//     }
-//   }
-
-//   distance = vl53.distance() / 10.0;
-//   if (distance == -1) {
-//     Serial.print(F("Couldn't get distance: "));
-//     Serial.println(vl53.vl_status);
-//     return;
-//   }
-
-//   adjustedDistance = 50.0 - distance;
-//   distanceVL = adjustedDistance;
-
-//   // BME280
-//   temperatureBME = bme.readTemperature();
-//   humidityBME = bme.readHumidity();
-//   Serial.printf("Temp: %.2f °C, Humidity: %.2f %%\n", temperatureBME, humidityBME);
-
-//   // Battery
-//   batteryVoltage = battery.readMillivolts();
-//   Serial.printf("Battery Voltage: %d mV\n", batteryVoltage);
-
-//   Serial.println("Sensor reading complete.");
-// }
-
 void setup() {
   boardInit(LORA_DEBUG_ENABLE, LORA_DEBUG_SERIAL_NUM, 115200);
   debug_printf("Booting Mesh Node T114...\n");
+
+  gpsSerial.begin(9600);
+  Serial.println("GPS Module Ready");
 
   // ===== Init I2C Bus =====
   Serial.println("Setting up I2C...");
@@ -214,6 +225,11 @@ void setup() {
 }
 
 void loop() {
+  
+  while (gpsSerial.available()) {
+    gps.encode(gpsSerial.read());
+  }
+
   static unsigned long lastTxTime = 0;
   unsigned long now = millis();
 
@@ -229,7 +245,6 @@ void loop() {
       break;
 
     case DEVICE_STATE_SEND:
-      // readSensors();
       prepareTxFrame(appPort);
       LoRaWAN.send();
       deviceState = DEVICE_STATE_CYCLE;
