@@ -81,11 +81,6 @@ static void prepareTxFrame(uint8_t port) {
 
 // ===== Pump Control Logic =====
 void controlPump(PumpState state, uint8_t cmd) {
-  // แสดงสถานะเริ่มต้นของฟังก์ชัน
-  Serial.printf("[controlPump] State=%d, Cmd=0x%02X\n", state, cmd);
-
-  if (!relayActionPending) {
-    Serial.println("[controlPump] Initial trigger detected.");
 
     if (state == STATE_PUMP_AUTO) {
       Serial.println("[controlPump] Mode: AUTO");
@@ -94,10 +89,16 @@ void controlPump(PumpState state, uint8_t cmd) {
         Serial.println("[controlPump] -> Pump ON (AUTO)");
         digitalWrite(LED_AUTO_ON, LOW);
         digitalWrite(RELAY_TRICK_ON, LOW);
+        delay(1000);
+        digitalWrite(LED_AUTO_ON, HIGH);
+        digitalWrite(RELAY_TRICK_ON, HIGH);
       } else {
         Serial.println("[controlPump] -> Pump OFF (AUTO)");
         digitalWrite(LED_AUTO_OFF, LOW);
         digitalWrite(RELAY_TRICK_OFF, LOW);
+        delay(1000);
+        digitalWrite(LED_AUTO_OFF, HIGH);
+        digitalWrite(RELAY_TRICK_OFF, HIGH);
       }
 
     } else if (state == STATE_PUMP_MANUAL) {
@@ -106,43 +107,15 @@ void controlPump(PumpState state, uint8_t cmd) {
       if (cmd == 0x01) {
         Serial.println("[controlPump] -> Pump ON (MANUAL)");
         digitalWrite(RELAY_TRICK_ON, LOW);
+        delay(1000);
+         digitalWrite(RELAY_TRICK_ON, HIGH);
       } else {
         Serial.println("[controlPump] -> Pump OFF (MANUAL)");
         digitalWrite(RELAY_TRICK_OFF, LOW);
+        delay(1000);
+        digitalWrite(RELAY_TRICK_OFF, HIGH);
       }
     }
-
-    relayActionStartTime = millis();
-    relayActionPending = true;
-    Serial.println("[controlPump] Action started, relay pending...");
-
-  } else if (millis() - relayActionStartTime >= 1000) {
-    Serial.println("[controlPump] 1s elapsed, completing relay action...");
-
-    if (state == STATE_PUMP_AUTO) {
-      if (cmd == 0x01) {
-        digitalWrite(LED_AUTO_ON, HIGH);
-        digitalWrite(RELAY_TRICK_ON, HIGH);
-        Serial.println("[controlPump] -> Pump ON Done (AUTO)");
-      } else {
-        digitalWrite(LED_AUTO_OFF, HIGH);
-        digitalWrite(RELAY_TRICK_OFF, HIGH);
-        Serial.println("[controlPump] -> Pump OFF Done (AUTO)");
-      }
-
-    } else if (state == STATE_PUMP_MANUAL) {
-      if (cmd == 0x01) {
-        digitalWrite(RELAY_TRICK_ON, HIGH);
-        Serial.println("[controlPump] -> Pump ON Done (MANUAL)");
-      } else {
-        digitalWrite(RELAY_TRICK_OFF, HIGH);
-        Serial.println("[controlPump] -> Pump OFF Done (MANUAL)");
-      }
-    }
-
-    relayActionPending = false;
-    Serial.println("[controlPump] Relay action complete.");
-  }
 }
 
 
@@ -192,9 +165,9 @@ void setup() {
   pinMode(RELAY_TRICK_OFF, OUTPUT);
 
    // <<< INITIAL STATES TO AVOID UNINTENDED LOWS >>>
-  digitalWrite(LED_AUTO_ON, HIGH);     // ปิด LED (Active Low)
+  digitalWrite(LED_AUTO_ON, HIGH); 
   digitalWrite(LED_AUTO_OFF, HIGH);
-  digitalWrite(RELAY_TRICK_ON, HIGH);  // ปิด Relay
+  digitalWrite(RELAY_TRICK_ON, HIGH);  
   digitalWrite(RELAY_TRICK_OFF, HIGH);
 
   pumpState = STATE_IDLE;
