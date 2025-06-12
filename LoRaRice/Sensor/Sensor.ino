@@ -61,13 +61,13 @@ void prepareTxFrame(uint8_t port) {
   // VL53L1X
   unsigned long startTime = millis();
   while (!vl53.dataReady()) {
-    if (millis() - startTime > 500) {
+    if (millis() - startTime > 1000) {
       Serial.println("VL53L1X Timeout.");
       return;
     }
   }
 
-  distance = vl53.distance() / 10.0;
+  distance = vl53.distance();
   if (distance == -1) {
     Serial.print(F("Couldn't get distance: "));
     Serial.println(vl53.vl_status);

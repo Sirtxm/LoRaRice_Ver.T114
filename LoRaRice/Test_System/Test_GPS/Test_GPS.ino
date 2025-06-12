@@ -1,31 +1,24 @@
-
+#include <TinyGPS++.h>
 
 TinyGPSPlus gps;
-static const uint32_t GPSBaud = 9600;
-
-#define VEXT_CTRL 21
 
 void setup() {
-  // เปิดไฟเลี้ยงให้โมดูล GPS
-  pinMode(VEXT_CTRL, OUTPUT);
-  digitalWrite(VEXT_CTRL, LOW);  // LOW = เปิด Vext (ดูจาก schematic ของ Heltec)
+  Serial.begin(115200);      // Serial Monitor
+  Serial1.begin(9600);       // UART1 สำหรับ GPS (ใช้ขาปกติ GPIO9/10)
 
-  Serial.begin(115200);
-  while (!Serial);  // รอให้ USB Serial พร้อมใช้งาน
-  Serial.println("เริ่มอ่าน GPS");
-
-  Serial1.begin(GPSBaud);  // ใช้ UART1 เชื่อมกับ GPS module
+  Serial.println("เริ่มอ่านพิกัดจาก GPS ด้วย TinyGPS++");
 }
 
 void loop() {
-  while (Serial1.available()) {
+  while (Serial1.available() > 0) {
     gps.encode(Serial1.read());
   }
 
   if (gps.location.isUpdated()) {
-    Serial.print("Lat: ");
-    Serial.print(gps.location.lat(), 6);
-    Serial.print(", Lng: ");
+    Serial.print("ละติจูด: ");
+    Serial.println(gps.location.lat(), 6);
+    Serial.print("ลองจิจูด: ");
     Serial.println(gps.location.lng(), 6);
+    Serial.println("------------------------");
   }
 }
