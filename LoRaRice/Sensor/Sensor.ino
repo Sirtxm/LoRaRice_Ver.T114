@@ -23,7 +23,7 @@ LoRaMacRegion_t loraWanRegion = LORAMAC_REGION_AS923;
 DeviceClass_t loraWanClass = CLASS_A;
 bool overTheAirActivation = true;
 bool loraWanAdr = true;
-bool isTxConfirmed = false;
+bool isTxConfirmed = true;
 uint8_t appPort = 2;
 uint8_t confirmedNbTrials = 1;
 uint32_t appTxDutyCycle = 15000;
@@ -232,7 +232,7 @@ void loop() {
 
   static unsigned long lastTxTime = 0;
   unsigned long now = millis();
-
+  
   switch (deviceState) {
     case DEVICE_STATE_INIT:
       LoRaWAN.init(loraWanClass, loraWanRegion);
