@@ -53,8 +53,10 @@ enum PumpState{
   STATE_PUMP_MANUAL = 2
 };
 PumpState pumpState;
-uint8_t pumpCmd;
+PumpState lastPumpState;
 
+uint8_t pumpCmd = STATE_IDLE;
+uint8_t lastPumpCmd = 0xFF;
 // ===== TIME VARIABLES =====
 unsigned long relayActionStartTime = 0;
 bool relayActionPending = false;
@@ -122,38 +124,39 @@ void controlPump(PumpState state, uint8_t cmd) {
 // ===== Downlink Control =====
 void downLinkDataHandle(McpsIndication_t *mcpsIndication)
 {
-
-  if(mcpsIndication->BufferSize >= 2) {
+  if (mcpsIndication->BufferSize >= 2) {
     uint8_t mode = mcpsIndication->Buffer[0];
     uint8_t cmd = mcpsIndication->Buffer[1];
     
     Serial.print(">>> Downlink Received: ");
-    Serial.print("mode=0x");
-    if (mode < 0x10) Serial.print("0");
-    Serial.print(mode, HEX);
-    Serial.print(", cmd=0x");
-    if (cmd < 0x10) Serial.print("0");
-    Serial.println(cmd, HEX);
-
+    PumpState newPumpState;
     switch(mode) {
       case 0x00:
         Serial.println("Mode: Auto Level Trigger");
-        pumpState = STATE_PUMP_AUTO;
-        pumpCmd = cmd;
-        controlPump(pumpState, pumpCmd);
+        newPumpState = STATE_PUMP_AUTO;
         break;
       case 0x01:
         Serial.println("Mode: Remote manual");
-        pumpState = STATE_PUMP_MANUAL;
-        pumpCmd = cmd;
-        controlPump(pumpState, pumpCmd);
+        newPumpState = STATE_PUMP_MANUAL;
         break;
       default:
         Serial.printf("Unknown downlink command: 0x%02X\n", cmd);
-        break;
+        return;  
+    }
+
+    if (newPumpState != lastPumpState || cmd != lastPumpCmd) {
+      lastPumpState = newPumpState;
+      lastPumpCmd = cmd;
+
+      pumpState = newPumpState;
+      pumpCmd = cmd;
+      controlPump(pumpState, pumpCmd);
+    } else {
+      Serial.println(">>> Duplicate command detected — ignored.");
     }
   }
 }
+
 
 void setup() {
   boardInit(LORA_DEBUG_ENABLE, LORA_DEBUG_SERIAL_NUM, 115200);
