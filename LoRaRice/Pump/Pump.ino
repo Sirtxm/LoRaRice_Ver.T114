@@ -19,7 +19,7 @@ uint32_t devAddr = (uint32_t)0x007e6ae1;
 
 // ===== LoRaWAN Settings =====
 LoRaMacRegion_t loraWanRegion = LORAMAC_REGION_AS923;  
-DeviceClass_t loraWanClass = CLASS_A;
+DeviceClass_t loraWanClass = CLASS_C;
 bool overTheAirActivation = true;
 bool loraWanAdr = true;
 bool isTxConfirmed = true;
