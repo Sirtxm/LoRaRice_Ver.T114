@@ -26,7 +26,7 @@ bool loraWanAdr = true;
 bool isTxConfirmed = true;
 uint8_t appPort = 2;
 uint8_t confirmedNbTrials = 1;
-uint32_t appTxDutyCycle = 15000;
+uint32_t appTxDutyCycle = 900000;
 
 uint16_t userChannelsMask[6] = { 0x00FF, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000 };
 
