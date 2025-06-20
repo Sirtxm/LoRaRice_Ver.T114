@@ -1,4 +1,6 @@
 #include <TinyGPS++.h>
+#include "Adafruit_TinyUSB.h"
+
 
 TinyGPSPlus gps;
 
