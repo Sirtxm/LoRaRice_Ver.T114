@@ -1,26 +1,37 @@
+#include <SoftwareSerial.h>
 #include <TinyGPS++.h>
-#include "Adafruit_TinyUSB.h"
 
+// ===== Pin Definitions =====
+#define GPS_RX 9   // ขา RX ของ Arduino (ต่อกับ TX ของ GPS)
+#define GPS_TX 10  // ขา TX ของ Arduino (ต่อกับ RX ของ GPS)
 
+// ===== Global Variables =====
+double latitude = 0;
+double longitude = 0;
+
+// ===== GPS Instances =====
+SoftwareSerial gpsSerial(GPS_RX, GPS_TX);
 TinyGPSPlus gps;
 
 void setup() {
-  Serial.begin(115200);      // Serial Monitor
-  Serial1.begin(9600);       // UART1 สำหรับ GPS (ใช้ขาปกติ GPIO9/10)
-
-  Serial.println("เริ่มอ่านพิกัดจาก GPS ด้วย TinyGPS++");
+  Serial.begin(115200);
+  gpsSerial.begin(9600);
+  Serial.println("GPS Module Ready");
 }
 
 void loop() {
-  while (Serial1.available() > 0) {
-    gps.encode(Serial1.read());
+  // อ่านข้อมูลจาก GPS
+  while (gpsSerial.available()) {
+    gps.encode(gpsSerial.read());
   }
 
-  if (gps.location.isUpdated()) {
-    Serial.print("ละติจูด: ");
-    Serial.println(gps.location.lat(), 6);
-    Serial.print("ลองจิจูด: ");
-    Serial.println(gps.location.lng(), 6);
-    Serial.println("------------------------");
+  // ตรวจสอบและแสดงข้อมูลพิกัด
+  if (gps.location.isUpdated() && gps.location.isValid()) {
+    latitude = gps.location.lat();
+    longitude = gps.location.lng();
+    Serial.print("Latitude: ");
+    Serial.println(latitude, 6);
+    Serial.print("Longitude: ");
+    Serial.println(longitude, 6);
   }
 }

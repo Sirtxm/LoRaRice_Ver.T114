@@ -28,6 +28,5 @@ void loop() {
   Serial.print(humidity);
   Serial.print(" % ");
  
-
   delay(2000); // รอ 2 วินาทีก่อนอ่านค่าใหม่
 }

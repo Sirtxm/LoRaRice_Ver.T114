@@ -185,10 +185,10 @@ void setup() {
   Serial.println("GPS Module Ready");
 
   // ===== Init I2C Bus =====
-  Serial.println("Setting up I2C...");
-  wi->setPins(30, 28);
+  Serial.println("Setting up I2C... SCL31 SDA 29");
+  wi->setPins(29, 31);
   wi->begin();
-  Serial.println("I2C started on SDA: 30, SCL: 28");
+
 
   // ===== Init BME280 =====
   Serial.println("Initializing BME280...");

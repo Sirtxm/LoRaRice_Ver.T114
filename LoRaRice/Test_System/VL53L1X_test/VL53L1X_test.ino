@@ -9,7 +9,7 @@ void setup() {
   while (!Serial) delay(10);
 
   Serial.println(F("Adafruit VL53L1X sensor demo"));
-  wi->setPins(30, 28);
+  wi->setPins(29, 31);
   wi->begin();
 
   if (! vl53.begin(0x29, wi)) {

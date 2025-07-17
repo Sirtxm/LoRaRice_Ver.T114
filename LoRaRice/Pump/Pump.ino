@@ -176,9 +176,9 @@ void setup() {
   pumpState = STATE_IDLE;
   pumpCmd = 0x00;
 
-  wi->setPins(30, 28);
+  wi->setPins(29, 31);
   wi->begin();
-  Serial.println("I2C started on SDA: 30, SCL: 28");
+  Serial.println("I2C started on SDA: 31, SCL: 29");
   bme.begin(0x76, wi);
   battery.begin();
 
