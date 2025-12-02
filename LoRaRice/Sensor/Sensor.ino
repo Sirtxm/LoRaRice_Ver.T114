@@ -26,8 +26,8 @@ bool loraWanAdr = true;
 bool isTxConfirmed = true;
 uint8_t appPort = 2;
 uint8_t confirmedNbTrials = 1;
-uint32_t appTxDutyCycle = 15000;
-// uint32_t appTxDutyCycle = 15 * 60 * 1000;
+uint32_t appTxDutyCycle = 15 * 60 * 1000;
+// uint32_t appTxDutyCycle = 15000;
 uint16_t userChannelsMask[6] = { 0x00FF, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000 };
 
 #define APP_TX_DUTYCYCLE_RND 1000 
@@ -83,7 +83,7 @@ void prepareTxFrame(uint8_t port) {
 
   }
 
-  adjustedDistance = 50.0 - distance;
+  adjustedDistance = 500.0 - distance;
   distanceVL = adjustedDistance;
 
   // BME280
@@ -121,25 +121,34 @@ void prepareTxFrame(uint8_t port) {
   // ===== Move encoding AFTER sensor update =====
   int16_t temp = temperatureBME * 100;
   uint16_t humi = humidityBME * 100;
-  uint16_t dist = distanceVL;
+  int16_t dist = distanceVL;
   uint16_t batt = batteryVoltage / 10;
   int32_t lat = latitude * 1e6;
   int32_t lon = longitude * 1e6;
 
+  // temp
   appData[0] = (temp >> 8) & 0xFF;
   appData[1] = temp & 0xFF;
+
+  //hump
   appData[2] = (humi >> 8) & 0xFF;
   appData[3] = humi & 0xFF;
+
+  //dist
   appData[4] = (dist >> 8) & 0xFF;
   appData[5] = dist & 0xFF;
+
+  //batt
   appData[6] = (batt >> 8) & 0xFF;
   appData[7] = batt & 0xFF;
 
+  //lat
   appData[8]  = (lat >> 24) & 0xFF;
   appData[9]  = (lat >> 16) & 0xFF;
   appData[10] = (lat >> 8) & 0xFF;
   appData[11] = lat & 0xFF;
 
+  // lon
   appData[12] = (lon >> 24) & 0xFF;
   appData[13] = (lon >> 16) & 0xFF;
   appData[14] = (lon >> 8) & 0xFF;
