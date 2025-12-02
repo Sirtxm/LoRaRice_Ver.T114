@@ -3,7 +3,7 @@
 TwoWire* wi = &Wire;  // ใช้ pointer ไปยัง Wire
 
 void setup() {
-  wi->setPins(30, 28);   // ตั้งขา SDA = 30, SCL = 28
+  wi->setPins(29,31);   // ตั้งขา SDA = 30, SCL = 28
   wi->begin();
 
   Serial.begin(115200);

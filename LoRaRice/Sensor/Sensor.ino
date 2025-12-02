@@ -9,14 +9,14 @@
 #include <TinyGPS++.h>
 
 // ===== LoRaWAN OTAA Credentials =====
-uint8_t devEui[] = {0x70, 0xB3, 0xD5, 0x7E, 0xD8, 0x00, 0x41, 0x3D};
-uint8_t appEui[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01};
-uint8_t appKey[] = {0xDE, 0x67, 0x90, 0x7C, 0x63, 0x5C, 0x79, 0x33, 0xA4, 0xD3, 0xC4, 0x4F, 0x12, 0x56, 0x0C, 0x50};
+uint8_t devEui[] = {0xFF, 0xAA, 0xCC, 0x01, 0x23, 0x45, 0x67, 0x89};
+uint8_t appEui[] = {0x70, 0xB3, 0xD5, 0x7E, 0xD0, 0x00, 0x00, 0x11};
+uint8_t appKey[] = {0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6, 0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, 0x3C};
 
 /* ABP para*/
-uint8_t nwkSKey[] = {0x15, 0xb1, 0xd0, 0xef, 0xa4, 0x63, 0xdf, 0xbe, 0x3d, 0x11, 0x18, 0x1e, 0x1e, 0xc7, 0xda, 0x85};
-uint8_t appSKey[] = {0xd7, 0x2c, 0x78, 0x75, 0x8c, 0xdc, 0xca, 0xbf, 0x55, 0xee, 0x4a, 0x77, 0x8d, 0x16, 0xef, 0x67};
-uint32_t devAddr = (uint32_t)0x007e6ae1;
+uint8_t nwkSKey[] = {0xE0, 0x70, 0x80, 0x08, 0x70, 0xE5, 0x31, 0x94, 0x29, 0x75, 0xCA, 0xFB, 0x6E, 0x27, 0x95, 0xA9};
+uint8_t appSKey[] = {0xD1, 0x1D, 0x6D, 0xF4, 0x7A, 0x99, 0x51, 0xA9, 0xC0, 0xCB, 0xB5, 0x43, 0x37, 0xD2, 0x85, 0x63};
+uint32_t devAddr = (uint32_t)0x27FC8281;
 
 // ===== LoRaWAN Settings =====
 LoRaMacRegion_t loraWanRegion = LORAMAC_REGION_AS923;  
@@ -26,17 +26,19 @@ bool loraWanAdr = true;
 bool isTxConfirmed = true;
 uint8_t appPort = 2;
 uint8_t confirmedNbTrials = 1;
-uint32_t appTxDutyCycle = 900000;
-
+uint32_t appTxDutyCycle = 15000;
+// uint32_t appTxDutyCycle = 15 * 60 * 1000;
 uint16_t userChannelsMask[6] = { 0x00FF, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000 };
 
 #define APP_TX_DUTYCYCLE_RND 1000 
+
 
 // ===== Define Value =====
 double adjustedDistance = 0;
 double distance = 0;
 
 // ===== Pin Definitions =====
+
 #define PIN_BAT_ADC      4    // GPIO4
 #define PIN_BAT_ADC_CTL  6    // GPIO6
 #define MY_BAT_AMPLIFY   4.9
@@ -70,7 +72,7 @@ void prepareTxFrame(uint8_t port) {
   while (!vl53.dataReady()) {
     if (millis() - startTime > 1000) {
       Serial.println("VL53L1X Timeout.");
-      return;
+      break;
     }
   }
 
@@ -78,7 +80,7 @@ void prepareTxFrame(uint8_t port) {
   if (distance == -1) {
     Serial.print(F("Couldn't get distance: "));
     Serial.println(vl53.vl_status);
-    return;
+
   }
 
   adjustedDistance = 50.0 - distance;
@@ -88,6 +90,7 @@ void prepareTxFrame(uint8_t port) {
   temperatureBME = bme.readTemperature();
   humidityBME = bme.readHumidity();
   Serial.printf("Temp: %.2f °C, Humidity: %.2f %%\n", temperatureBME, humidityBME);
+
 
   // Battery
   batteryVoltage = battery.readMillivolts();
@@ -118,8 +121,8 @@ void prepareTxFrame(uint8_t port) {
   // ===== Move encoding AFTER sensor update =====
   int16_t temp = temperatureBME * 100;
   uint16_t humi = humidityBME * 100;
-  uint16_t dist = distanceVL * 10;
-  uint16_t batt = batteryVoltage;
+  uint16_t dist = distanceVL;
+  uint16_t batt = batteryVoltage / 10;
   int32_t lat = latitude * 1e6;
   int32_t lon = longitude * 1e6;
 
@@ -149,34 +152,6 @@ void prepareTxFrame(uint8_t port) {
 
 }
 
-
-void downLinkDataHandle(McpsIndication_t *mcpsIndication)
-{
-  Serial.printf("Downlink received | Port: %d | Size: %d\n", mcpsIndication->Port, mcpsIndication->BufferSize);
-
-  Serial.print("Payload: ");
-  for(uint8_t i = 0; i < mcpsIndication->BufferSize; i++) {
-    Serial.printf("%02X ", mcpsIndication->Buffer[i]);
-  }
-  Serial.println();
-
-  if(mcpsIndication->BufferSize >= 1) {
-    uint8_t cmd = mcpsIndication->Buffer[0];
-  switch (cmd) {
-        case 0x00:
-          Serial.println("Command: Enter Debug Mode");
-          break;
-        case 0x01:
-          Serial.println("Command: Enter Normal Mode");
-          break;
-        default:
-          Serial.printf("Unknown command: 0x%02X\n", cmd);
-          break;
-      }
-  }
-}
-
-
 void setup() {
   boardInit(LORA_DEBUG_ENABLE, LORA_DEBUG_SERIAL_NUM, 115200);
   debug_printf("Booting Mesh Node T114...\n");
@@ -188,7 +163,6 @@ void setup() {
   Serial.println("Setting up I2C... SCL31 SDA 29");
   wi->setPins(29, 31);
   wi->begin();
-
 
   // ===== Init BME280 =====
   Serial.println("Initializing BME280...");
@@ -208,13 +182,18 @@ void setup() {
   }
   Serial.println(F("VL53L1X sensor OK!"));
 
-   if (vl53.VL53L1X_SetROI(5,5) == 0) {   //(ROIcenter,ROIsize)
+   if (vl53.VL53L1X_SetROI(5,5) == 0) {   
     Serial.println(F("ROI successed"));
   } else {
     Serial.println(F("ROI Failure"));
   }
   Serial.println("VL53L1X ready.");
 
+  if (!vl53.startRanging()) {
+    Serial.println(F("VL53L1X startRanging FAILED!"));
+  } else {
+    Serial.println(F("VL53L1X startRanging OK!"));
+  }
   // ===== Init Battery Monitor =====
   Serial.println("Initializing battery monitor...");
   battery.begin();
