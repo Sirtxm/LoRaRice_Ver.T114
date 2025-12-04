@@ -26,19 +26,18 @@ bool loraWanAdr = true;
 bool isTxConfirmed = true;
 uint8_t appPort = 2;
 uint8_t confirmedNbTrials = 1;
-uint32_t appTxDutyCycle = 15 * 60 * 1000;
-// uint32_t appTxDutyCycle = 15000;
+// uint32_t appTxDutyCycle = 15 * 60 * 1000;
+uint32_t appTxDutyCycle = 15000;
 uint16_t userChannelsMask[6] = { 0x00FF, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000 };
 
 #define APP_TX_DUTYCYCLE_RND 1000 
-
 
 // ===== Define Value =====
 double adjustedDistance = 0;
 double distance = 0;
 
 // ===== Pin Definitions =====
-
+#define PIN_VEXT_CTRL    21   // power
 #define PIN_BAT_ADC      4    // GPIO4
 #define PIN_BAT_ADC_CTL  6    // GPIO6
 #define MY_BAT_AMPLIFY   4.9
@@ -161,9 +160,25 @@ void prepareTxFrame(uint8_t port) {
 
 }
 
+void setupSensor(){
+  digitalWrite(PIN_VEXT_CTRL, HIGH);
+  delay(500);
+
+  //BME
+  bme.begin(0x76, wi);
+  //VL53L1X
+  vl53.begin(0x29, wi);
+  vl53.VL53L1X_SetROI(5,5);
+  vl53.startRanging();
+}
+
 void setup() {
   boardInit(LORA_DEBUG_ENABLE, LORA_DEBUG_SERIAL_NUM, 115200);
   debug_printf("Booting Mesh Node T114...\n");
+
+  //setup vext_ctrl
+  pinMode(PIN_VEXT_CTRL, OUTPUT);
+  digitalWrite(PIN_VEXT_CTRL, HIGH);
 
   gpsSerial.begin(9600);
   Serial.println("GPS Module Ready");
@@ -233,6 +248,7 @@ void loop() {
       break;
 
     case DEVICE_STATE_SEND:
+      setupSensor();
       prepareTxFrame(appPort);
       LoRaWAN.send();
       deviceState = DEVICE_STATE_CYCLE;
@@ -242,6 +258,7 @@ void loop() {
       lastTxTime = now;
       txDutyCycleTime = appTxDutyCycle + randr(-APP_TX_DUTYCYCLE_RND, APP_TX_DUTYCYCLE_RND);
       LoRaWAN.cycle(txDutyCycleTime);
+      digitalWrite(PIN_VEXT_CTRL, LOW);
       deviceState = DEVICE_STATE_SLEEP;
       break;
 
