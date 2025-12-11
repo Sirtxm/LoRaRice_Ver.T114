@@ -35,10 +35,9 @@ uint16_t userChannelsMask[6] = { 0x00FF, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000 
 #define PIN_BAT_ADC_CTL 6
 #define MY_BAT_AMPLIFY  4.9
 
-#define LED_AUTO_ON     8
-#define LED_AUTO_OFF    7
-#define RELAY_TRICK_ON  44
-#define RELAY_TRICK_OFF 46
+#define LED_AUTO     8
+#define RELAY_ON     44
+#define RELAY_OFF    46
 
 // ===== Global Instances =====
 TwoWire *wi = &Wire;
@@ -56,6 +55,8 @@ PumpState lastPumpState;
 
 uint8_t pumpCmd = STATE_IDLE;
 uint8_t lastPumpCmd = 0xFF;
+
+int stateLed = 0;
 // ===== TIME VARIABLES =====
 unsigned long relayActionStartTime = 0;
 bool relayActionPending = false;
@@ -82,36 +83,34 @@ void controlPump(PumpState state, uint8_t cmd) {
 
     if (state == STATE_PUMP_AUTO) {
       Serial.println("[controlPump] Mode: AUTO");
+      digitalWrite(LED_AUTO, LOW);    //LED on
 
       if (cmd == 0x01) {
         Serial.println("[controlPump] -> Pump ON (AUTO)");
-        digitalWrite(LED_AUTO_ON, LOW);
-        digitalWrite(RELAY_TRICK_ON, LOW);
+        digitalWrite(RELAY_ON, LOW);    //Relay on
         delay(1000);
-        digitalWrite(LED_AUTO_ON, HIGH);
-        digitalWrite(RELAY_TRICK_ON, HIGH);
-      } else {
+        digitalWrite(RELAY_ON, HIGH); //Relay on(close)
+      } else if(cmd == 0x00){
         Serial.println("[controlPump] -> Pump OFF (AUTO)");
-        digitalWrite(LED_AUTO_OFF, LOW);
-        digitalWrite(RELAY_TRICK_OFF, LOW);
+        digitalWrite(RELAY_OFF, LOW);
         delay(1000);
-        digitalWrite(LED_AUTO_OFF, HIGH);
-        digitalWrite(RELAY_TRICK_OFF, HIGH);
-      }
+        digitalWrite(RELAY_OFF, HIGH);
+      } 
 
     } else if (state == STATE_PUMP_MANUAL) {
       Serial.println("[controlPump] Mode: MANUAL");
+      digitalWrite(LED_AUTO, HIGH); 
 
       if (cmd == 0x01) {
         Serial.println("[controlPump] -> Pump ON (MANUAL)");
-        digitalWrite(RELAY_TRICK_ON, LOW);
+        digitalWrite(RELAY_ON, LOW);
         delay(1000);
-         digitalWrite(RELAY_TRICK_ON, HIGH);
-      } else {
+        digitalWrite(RELAY_ON, HIGH);
+      } else if (cmd == 0x00){
         Serial.println("[controlPump] -> Pump OFF (MANUAL)");
-        digitalWrite(RELAY_TRICK_OFF, LOW);
+        digitalWrite(RELAY_OFF, LOW);
         delay(1000);
-        digitalWrite(RELAY_TRICK_OFF, HIGH);
+        digitalWrite(RELAY_OFF, HIGH);
       }
     }
 }
@@ -134,6 +133,10 @@ void downLinkDataHandle(McpsIndication_t *mcpsIndication)
       case 0x01:
         Serial.println("Mode: Remote manual");
         newPumpState = STATE_PUMP_MANUAL;
+        break;
+      case 0x02:
+        Serial.println("Mode: Auto Level Trigger off");
+        digitalWrite(LED_AUTO, HIGH);
         break;
       default:
         Serial.printf("Unknown downlink command: 0x%02X\n", cmd);
@@ -158,22 +161,33 @@ void setup() {
   boardInit(LORA_DEBUG_ENABLE, LORA_DEBUG_SERIAL_NUM, 115200);
   debug_printf("Booting Mesh Node Pump Controller...\n");
 
-  pinMode(LED_AUTO_ON, OUTPUT);
-  pinMode(LED_AUTO_OFF, OUTPUT);
-  pinMode(RELAY_TRICK_ON, OUTPUT);
-  pinMode(RELAY_TRICK_OFF, OUTPUT);
+  pinMode(CHECK_LED, INPUT);
 
-  digitalWrite(LED_AUTO_ON, HIGH); 
-  digitalWrite(LED_AUTO_OFF, HIGH);
-  digitalWrite(RELAY_TRICK_ON, HIGH);  
-  digitalWrite(RELAY_TRICK_OFF, HIGH);
+  pinMode(LED_AUTO, OUTPUT);
+  pinMode(RELAY_ON, OUTPUT);
+  pinMode(RELAY_OFF, OUTPUT);
+
+  digitalWrite(LED_AUTO, HIGH); 
+  digitalWrite(RELAY_ON, HIGH);  
+  digitalWrite(RELAY_OFF, HIGH);
 
   pumpState = STATE_IDLE;
   pumpCmd = 0x00;
+
+  // ===== Init I2C Bus =====
   wi->setPins(29, 31);
   wi->begin();
-  Serial.println("I2C started on SDA: 29, SCL: 31");
-  bme.begin(0x76, wi);
+  Serial.println("Setting up I2C... SCL31 SDA 29");
+
+  // ===== Init BME280 =====
+  Serial.println("Initializing BME280...");
+  if (!bme.begin(0x76, wi)) {
+    Serial.println("[ERROR] BME280 not found at 0x76. Check wiring or address jumper!");
+    while (1) delay(100);
+  }
+  Serial.println("BME280 initialized successfully.");
+
+  // ======= Init Batt ========
   battery.begin();
 
   deviceState = DEVICE_STATE_INIT;
