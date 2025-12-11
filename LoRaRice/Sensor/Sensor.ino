@@ -42,8 +42,8 @@ double distance = 0;
 #define PIN_BAT_ADC_CTL  6    // GPIO6
 #define MY_BAT_AMPLIFY   4.9
 
-#define GPS_RX 9   // GPS TX ต่อเข้าขานี้
-#define GPS_TX 10  // ไม่ได้ใช้ก็ได้
+#define GPS_RX 9   
+#define GPS_TX 10  
 
 // Global variables
 float temperatureBME = 0;
@@ -156,8 +156,6 @@ void prepareTxFrame(uint8_t port) {
   Serial.printf("Temp: %d, Humi: %d, Dist: %d, Batt: %d, Lat: %.6f, Lon: %.6f\n",
               temp, humi, dist, batt,
               latitude, longitude);
-
-
 }
 
 void setupSensor(){
