@@ -7,14 +7,14 @@
 #include "heltec_nrf_lorawan.h"
 
 // ===== LoRaWAN OTAA Credentials =====
-uint8_t devEui[] = {0xFF, 0xAA, 0xCC, 0x01, 0x23, 0x45, 0x67, 0x89};
-uint8_t appEui[] = {0x70, 0xB3, 0xD5, 0x7E, 0xD0, 0x00, 0x00, 0x11};
-uint8_t appKey[] = {0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6, 0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, 0x3C};
+uint8_t devEui[] = {0x70, 0xB3, 0xD5, 0x7E, 0xD8, 0x00, 0x4E, 0xD7};
+uint8_t appEui[] = {0xAA, 0xAA, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11};
+uint8_t appKey[] = {0x7F, 0xCD, 0x8A, 0x66, 0x37, 0xC3, 0xDE, 0x76, 0xF0, 0x73, 0xFA, 0x60, 0xF9, 0xAC, 0x88, 0xCB};
 
 /* ABP para*/
-uint8_t nwkSKey[] = {0xE0, 0x70, 0x80, 0x08, 0x70, 0xE5, 0x31, 0x94, 0x29, 0x75, 0xCA, 0xFB, 0x6E, 0x27, 0x95, 0xA9};
-uint8_t appSKey[] = {0xD1, 0x1D, 0x6D, 0xF4, 0x7A, 0x99, 0x51, 0xA9, 0xC0, 0xCB, 0xB5, 0x43, 0x37, 0xD2, 0x85, 0x63};
-uint32_t devAddr = (uint32_t)0x27FC8281;
+uint8_t nwkSKey[] = {0xD2, 0xCE, 0x33, 0xCD, 0xA0, 0x14, 0x63, 0x9C, 0x29, 0x9D, 0x8F, 0xD4, 0x9B, 0x7A, 0xBB, 0x3A};
+uint8_t appSKey[] = {0x73, 0xA4, 0xB3, 0xB8, 0xA1, 0x36, 0x6F, 0x4A, 0x61, 0x16, 0x79, 0x64, 0x49, 0x9C, 0xA7, 0xCD};
+uint32_t devAddr = (uint32_t)0x27FC828A;
 
 // ===== LoRaWAN Settings =====
 LoRaMacRegion_t loraWanRegion = LORAMAC_REGION_AS923;  
@@ -35,7 +35,8 @@ uint16_t userChannelsMask[6] = { 0x00FF, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000 
 #define PIN_BAT_ADC_CTL 6
 #define MY_BAT_AMPLIFY  4.9
 
-#define LED_AUTO     8
+#define ACTIVE_PUMP  8
+#define LED_AUTO     7
 #define RELAY_ON     44
 #define RELAY_OFF    46
 
@@ -43,7 +44,7 @@ uint16_t userChannelsMask[6] = { 0x00FF, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000 
 TwoWire *wi = &Wire;
 Adafruit_BME280 bme;
 BatteryMonitor battery(PIN_BAT_ADC, PIN_BAT_ADC_CTL, MY_BAT_AMPLIFY);
-
+int active ;
 // ===== Pump Control Variables =====
 enum PumpState{
   STATE_IDLE = 0,
@@ -64,7 +65,9 @@ bool relayActionPending = false;
 
 // ===== LoraWAN Payload =====
 static void prepareTxFrame(uint8_t port) {
-  appDataSize = 6;
+  appDataSize = 7;
+
+  active = digitalRead(ACTIVE_PUMP);
 
   int16_t temp = bme.readTemperature() * 100;
   uint16_t humi = bme.readHumidity() * 100;
@@ -76,6 +79,11 @@ static void prepareTxFrame(uint8_t port) {
   appData[3] = humi & 0xFF;
   appData[4] = (batt >> 8) & 0xFF;
   appData[5] = batt & 0xFF;
+  appData[6] = active & 0x01;
+
+  Serial.println("Payload prepared for LoRaWAN:");
+  Serial.printf("Temp: %d, Humi: %d, Batt: %d, Active: %d\n",
+                temp, humi, batt, active);
 }
 
 // ===== Pump Control Logic =====
@@ -142,17 +150,17 @@ void downLinkDataHandle(McpsIndication_t *mcpsIndication)
         Serial.printf("Unknown downlink command: 0x%02X\n", cmd);
         return;  
     }
+  // detect same state
+    // if (newPumpState != lastPumpState || cmd != lastPumpCmd) {
+    //   lastPumpState = newPumpState;
+    //   lastPumpCmd = cmd;
 
-    if (newPumpState != lastPumpState || cmd != lastPumpCmd) {
-      lastPumpState = newPumpState;
-      lastPumpCmd = cmd;
-
-      pumpState = newPumpState;
-      pumpCmd = cmd;
-      controlPump(pumpState, pumpCmd);
-    } else {
-      Serial.println(">>> Duplicate command detected — ignored.");
-    }
+    //   pumpState = newPumpState;
+    //   pumpCmd = cmd;
+    //   controlPump(pumpState, pumpCmd);
+    // } else {
+    //   Serial.println(">>> Duplicate command detected — ignored.");
+    // }
   }
 }
 
@@ -161,7 +169,7 @@ void setup() {
   boardInit(LORA_DEBUG_ENABLE, LORA_DEBUG_SERIAL_NUM, 115200);
   debug_printf("Booting Mesh Node Pump Controller...\n");
 
-  pinMode(CHECK_LED, INPUT);
+  pinMode(ACTIVE_PUMP, INPUT);
 
   pinMode(LED_AUTO, OUTPUT);
   pinMode(RELAY_ON, OUTPUT);
@@ -180,12 +188,12 @@ void setup() {
   Serial.println("Setting up I2C... SCL31 SDA 29");
 
   // ===== Init BME280 =====
-  Serial.println("Initializing BME280...");
-  if (!bme.begin(0x76, wi)) {
-    Serial.println("[ERROR] BME280 not found at 0x76. Check wiring or address jumper!");
-    while (1) delay(100);
-  }
-  Serial.println("BME280 initialized successfully.");
+  // Serial.println("Initializing BME280...");
+  // if (!bme.begin(0x76, wi)) {
+  //   Serial.println("[ERROR] BME280 not found at 0x76. Check wiring or address jumper!");
+  //   while (1) delay(100);
+  // }
+  // Serial.println("BME280 initialized successfully.");
 
   // ======= Init Batt ========
   battery.begin();
