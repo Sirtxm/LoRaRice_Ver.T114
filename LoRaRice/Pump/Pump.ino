@@ -36,9 +36,9 @@ uint16_t userChannelsMask[6] = { 0x00FF, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000 
 #define MY_BAT_AMPLIFY  4.9
 
 #define ACTIVE_PUMP  8
-#define LED_AUTO     7
-#define RELAY_ON     44
-#define RELAY_OFF    46
+#define LED_AUTO     13
+#define RELAY_ON     16
+#define RELAY_OFF    33
 
 // ===== Global Instances =====
 TwoWire *wi = &Wire;
@@ -58,10 +58,6 @@ uint8_t pumpCmd = STATE_IDLE;
 uint8_t lastPumpCmd = 0xFF;
 
 int stateLed = 0;
-// ===== TIME VARIABLES =====
-unsigned long relayActionStartTime = 0;
-bool relayActionPending = false;
-
 
 // ===== LoraWAN Payload =====
 static void prepareTxFrame(uint8_t port) {
@@ -91,14 +87,13 @@ void controlPump(PumpState state, uint8_t cmd) {
 
     if (state == STATE_PUMP_AUTO) {
       Serial.println("[controlPump] Mode: AUTO");
-      digitalWrite(LED_AUTO, LOW);    //LED on
 
       if (cmd == 0x01) {
         Serial.println("[controlPump] -> Pump ON (AUTO)");
         digitalWrite(RELAY_ON, LOW);    //Relay on
         delay(1000);
         digitalWrite(RELAY_ON, HIGH); //Relay on(close)
-      } else if(cmd == 0x00){
+      } else if (cmd == 0x00){
         Serial.println("[controlPump] -> Pump OFF (AUTO)");
         digitalWrite(RELAY_OFF, LOW);
         delay(1000);
@@ -107,14 +102,14 @@ void controlPump(PumpState state, uint8_t cmd) {
 
     } else if (state == STATE_PUMP_MANUAL) {
       Serial.println("[controlPump] Mode: MANUAL");
-      digitalWrite(LED_AUTO, HIGH); 
+      digitalWrite(LED_AUTO, HIGH);   //Led Auto off
 
       if (cmd == 0x01) {
         Serial.println("[controlPump] -> Pump ON (MANUAL)");
         digitalWrite(RELAY_ON, LOW);
         delay(1000);
         digitalWrite(RELAY_ON, HIGH);
-      } else if (cmd == 0x00){
+      } else if(cmd == 0x00){
         Serial.println("[controlPump] -> Pump OFF (MANUAL)");
         digitalWrite(RELAY_OFF, LOW);
         delay(1000);
@@ -136,6 +131,7 @@ void downLinkDataHandle(McpsIndication_t *mcpsIndication)
     switch(mode) {
       case 0x00:
         Serial.println("Mode: Auto Level Trigger");
+        digitalWrite(LED_AUTO, LOW); 
         newPumpState = STATE_PUMP_AUTO;
         break;
       case 0x01:
@@ -150,20 +146,21 @@ void downLinkDataHandle(McpsIndication_t *mcpsIndication)
         Serial.printf("Unknown downlink command: 0x%02X\n", cmd);
         return;  
     }
+    controlPump(newPumpState, cmd);
   // detect same state
-    // if (newPumpState != lastPumpState || cmd != lastPumpCmd) {
-    //   lastPumpState = newPumpState;
-    //   lastPumpCmd = cmd;
+  //   if (newPumpState != lastPumpState || cmd != lastPumpCmd) {
+  //     lastPumpState = newPumpState;
+  //     lastPumpCmd = cmd;
 
-    //   pumpState = newPumpState;
-    //   pumpCmd = cmd;
-    //   controlPump(pumpState, pumpCmd);
-    // } else {
-    //   Serial.println(">>> Duplicate command detected — ignored.");
-    // }
+  //     pumpState = newPumpState;
+  //     pumpCmd = cmd;
+  //     controlPump(pumpState, pumpCmd);
+  //   } else {
+  //     Serial.println(">>> Duplicate command detected — ignored.");
+  //   }
+  // }
   }
 }
-
 
 void setup() {
   boardInit(LORA_DEBUG_ENABLE, LORA_DEBUG_SERIAL_NUM, 115200);
