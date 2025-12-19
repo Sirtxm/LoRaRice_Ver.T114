@@ -172,9 +172,34 @@ void setup() {
   pinMode(RELAY_ON, OUTPUT);
   pinMode(RELAY_OFF, OUTPUT);
 
-  digitalWrite(LED_AUTO, HIGH); 
-  digitalWrite(RELAY_ON, HIGH);  
-  digitalWrite(RELAY_OFF, HIGH);
+// =========== Open Drain ==============
+    nrf_gpio_cfg(
+    digitalPinToPinName(LED_AUTO),
+    NRF_GPIO_PIN_DIR_OUTPUT,
+    NRF_GPIO_PIN_INPUT_DISCONNECT,
+    NRF_GPIO_PIN_NOPULL,
+    NRF_GPIO_PIN_S0D1, // S0D1 = Standard 0, Disconnect 1 (Open Drain)
+    NRF_GPIO_PIN_NOSENSE
+  );
+
+    nrf_gpio_cfg(
+    digitalPinToPinName(RELAY_ON),
+    NRF_GPIO_PIN_DIR_OUTPUT,
+    NRF_GPIO_PIN_INPUT_DISCONNECT,
+    NRF_GPIO_PIN_NOPULL,
+    NRF_GPIO_PIN_S0D1, // S0D1 = Standard 0, Disconnect 1 (Open Drain)
+    NRF_GPIO_PIN_NOSENSE
+  );
+
+    nrf_gpio_cfg(
+    digitalPinToPinName(RELAY_OFF),
+    NRF_GPIO_PIN_DIR_OUTPUT,
+    NRF_GPIO_PIN_INPUT_DISCONNECT,
+    NRF_GPIO_PIN_NOPULL,
+    NRF_GPIO_PIN_S0D1, // S0D1 = Standard 0, Disconnect 1 (Open Drain)
+    NRF_GPIO_PIN_NOSENSE
+  );
+  Serial.println("Pin configured as Open Drain (S0D1)");
 
   pumpState = STATE_IDLE;
   pumpCmd = 0x00;
