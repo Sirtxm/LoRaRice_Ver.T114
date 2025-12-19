@@ -138,10 +138,6 @@ void downLinkDataHandle(McpsIndication_t *mcpsIndication)
         Serial.println("Mode: Remote manual");
         newPumpState = STATE_PUMP_MANUAL;
         break;
-      case 0x02:
-        Serial.println("Mode: Auto Level Trigger off");
-        digitalWrite(LED_AUTO, HIGH);
-        break;
       default:
         Serial.printf("Unknown downlink command: 0x%02X\n", cmd);
         return;  
