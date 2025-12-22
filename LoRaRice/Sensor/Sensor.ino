@@ -68,13 +68,7 @@ void prepareTxFrame(uint8_t port) {
 
   // VL53L1X
   unsigned long startTime = millis();
-  while (!vl53.dataReady()) {
-    if (millis() - startTime > 1000) {
-      Serial.println("VL53L1X Timeout.");
-      break;
-    }
-  }
-
+  vl53.dataReady();
   distance = vl53.distance();
   if (distance == -1) {
     Serial.print(F("Couldn't get distance: "));
@@ -167,6 +161,10 @@ void setupSensor(){
   vl53.begin(0x29, wi);
   vl53.VL53L1X_SetROI(5,5);
   vl53.startRanging();
+  vl53.setTimingBudget(500);
+  vl53.VL53L1X_SetOffset(25);
+  vl53.VL53L1X_SetXtalk(0);
+  vl53.VL53L1X_SetDistanceMode(2);
 }
 
 void setup() {
@@ -186,35 +184,17 @@ void setup() {
   wi->begin();
 
   // ===== Init BME280 =====
-  Serial.println("Initializing BME280...");
-  if (!bme.begin(0x76, wi)) {
-    Serial.println("[ERROR] BME280 not found at 0x76. Check wiring or address jumper!");
-    while (1) delay(100);
-  }
-  Serial.println("BME280 initialized successfully.");
+  bme.begin(0x76, wi);
 
   // ===== Init VL53L1X =====
-  Serial.println("Initializing VL53L1X...");
+  vl53.begin(0x29, wi);
+  vl53.VL53L1X_SetROI(5,5);
+  vl53.startRanging();
+  vl53.setTimingBudget(500);
+  vl53.VL53L1X_SetOffset(25);
+  vl53.VL53L1X_SetXtalk(0);
+  vl53.VL53L1X_SetDistanceMode(2);
 
-   if (!vl53.begin(0x29, wi)) {
-    Serial.print(F("Error on init of VL sensor: "));
-    Serial.println(vl53.vl_status);
-    while (1) delay(10);
-  }
-  Serial.println(F("VL53L1X sensor OK!"));
-
-   if (vl53.VL53L1X_SetROI(5,5) == 0) {   
-    Serial.println(F("ROI successed"));
-  } else {
-    Serial.println(F("ROI Failure"));
-  }
-  Serial.println("VL53L1X ready.");
-
-  if (!vl53.startRanging()) {
-    Serial.println(F("VL53L1X startRanging FAILED!"));
-  } else {
-    Serial.println(F("VL53L1X startRanging OK!"));
-  }
   // ===== Init Battery Monitor =====
   Serial.println("Initializing battery monitor...");
   battery.begin();
