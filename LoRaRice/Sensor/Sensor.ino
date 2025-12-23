@@ -68,7 +68,12 @@ void prepareTxFrame(uint8_t port) {
 
   // VL53L1X
   unsigned long startTime = millis();
-  vl53.dataReady();
+    while (!vl53.dataReady()) {
+    if (millis() - startTime > 1000) {
+      Serial.println("VL53L1X Timeout.");
+      break;
+    }
+  }
   distance = vl53.distance();
   if (distance == -1) {
     Serial.print(F("Couldn't get distance: "));
@@ -161,10 +166,6 @@ void setupSensor(){
   vl53.begin(0x29, wi);
   vl53.VL53L1X_SetROI(5,5);
   vl53.startRanging();
-  vl53.setTimingBudget(500);
-  vl53.VL53L1X_SetOffset(25);
-  vl53.VL53L1X_SetXtalk(0);
-  vl53.VL53L1X_SetDistanceMode(2);
 }
 
 void setup() {
@@ -190,10 +191,6 @@ void setup() {
   vl53.begin(0x29, wi);
   vl53.VL53L1X_SetROI(5,5);
   vl53.startRanging();
-  vl53.setTimingBudget(500);
-  vl53.VL53L1X_SetOffset(25);
-  vl53.VL53L1X_SetXtalk(0);
-  vl53.VL53L1X_SetDistanceMode(2);
 
   // ===== Init Battery Monitor =====
   Serial.println("Initializing battery monitor...");
