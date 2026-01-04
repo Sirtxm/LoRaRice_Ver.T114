@@ -159,7 +159,7 @@ void prepareTxFrame(uint8_t port) {
 
 void setupSensor(){
   digitalWrite(PIN_VEXT_CTRL, HIGH);
-  delay(40000);
+  delay(60000);
   //BME
   bme.begin(0x76, wi);
   //VL53L1X
