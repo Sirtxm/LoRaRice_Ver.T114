@@ -81,14 +81,15 @@ void prepareTxFrame(uint8_t port) {
     distance = -1;
   }
 
-  if (distance == -1) {
+  if (distance < 0) {
     Serial.print(F("Couldn't get distance: "));
     Serial.println(vl53.vl_status);
+
+    distanceVL = -99;
+  } else {
+    adjustedDistance = 500.0 - distance;
+    distanceVL = adjustedDistance;
   }
-
-  adjustedDistance = 500.0 - distance;
-  distanceVL = adjustedDistance;
-
   // BME280
   temperatureBME = bme.readTemperature();
   humidityBME = bme.readHumidity();
@@ -164,6 +165,7 @@ void prepareTxFrame(uint8_t port) {
 
 void setupSensor(){
   digitalWrite(PIN_VEXT_CTRL, HIGH);
+  delay(150);
   //BME
   bme.begin(0x76, wi);
   //VL53L1X
