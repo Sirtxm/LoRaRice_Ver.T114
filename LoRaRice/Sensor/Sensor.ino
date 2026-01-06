@@ -9,9 +9,9 @@
 #include <TinyGPS++.h>
 
 // ===== LoRaWAN OTAA Credentials =====
-uint8_t devEui[] = {0xFF, 0xAA, 0xCC, 0x01, 0x23, 0x45, 0x67, 0x89};
-uint8_t appEui[] = {0x70, 0xB3, 0xD5, 0x7E, 0xD0, 0x00, 0x00, 0x11};
-uint8_t appKey[] = {0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6, 0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, 0x3C};
+uint8_t devEui[] = {0x70, 0xB3, 0xD5, 0x7E, 0xD8, 0x00, 0x4F, 0x3F};
+uint8_t appEui[] = {0xAA, 0xBB, 0xCC, 0x11, 0x11, 0x11, 0x11, 0x11};
+uint8_t appKey[] = {0xCF, 0x51, 0x8D, 0xB1, 0x01, 0xB4, 0x9D, 0x44, 0xF4, 0x76, 0x72, 0xD9, 0xC7, 0xFC, 0x76, 0x3F};
 
 /* ABP para*/
 uint8_t nwkSKey[] = {0xE0, 0x70, 0x80, 0x08, 0x70, 0xE5, 0x31, 0x94, 0x29, 0x75, 0xCA, 0xFB, 0x6E, 0x27, 0x95, 0xA9};
@@ -19,18 +19,18 @@ uint8_t appSKey[] = {0xD1, 0x1D, 0x6D, 0xF4, 0x7A, 0x99, 0x51, 0xA9, 0xC0, 0xCB,
 uint32_t devAddr = (uint32_t)0x27FC8281;
 
 // ===== LoRaWAN Settings =====
-LoRaMacRegion_t loraWanRegion = LORAMAC_REGION_AS923;  
+LoRaMacRegion_t loraWanRegion = LORAMAC_REGION_AS923;
 DeviceClass_t loraWanClass = CLASS_A;
 bool overTheAirActivation = true;
 bool loraWanAdr = true;
-bool isTxConfirmed = true;
+bool isTxConfirmed = false;
 uint8_t appPort = 2;
 uint8_t confirmedNbTrials = 1;
 uint32_t appTxDutyCycle = 15 * 60 * 1000;
 // uint32_t appTxDutyCycle = 15000;
 uint16_t userChannelsMask[6] = { 0x00FF, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000 };
 
-#define APP_TX_DUTYCYCLE_RND 1000 
+#define APP_TX_DUTYCYCLE_RND 1000
 
 // ===== Define Value =====
 double adjustedDistance = 0;
@@ -42,8 +42,8 @@ double distance = 0;
 #define PIN_BAT_ADC_CTL  6    // GPIO6
 #define MY_BAT_AMPLIFY   4.9
 
-#define GPS_RX 9   
-#define GPS_TX 10  
+#define GPS_RX 9
+#define GPS_TX 10
 
 // Global variables
 float temperatureBME = 0;
@@ -61,6 +61,13 @@ Adafruit_VL53L1X vl53 = Adafruit_VL53L1X();
 SoftwareSerial gpsSerial(GPS_RX, GPS_TX);
 TinyGPSPlus gps;
 
+// ===== NEW: non-blocking warmup variables =====
+unsigned long sensorOnTime = 0;
+bool sensorWarming = false;
+
+// ==========================
+// Prepare payload
+// ==========================
 void prepareTxFrame(uint8_t port) {
   appDataSize = 16;
 
@@ -68,17 +75,23 @@ void prepareTxFrame(uint8_t port) {
 
   // VL53L1X
   unsigned long startTime = millis();
-    while (!vl53.dataReady()) {
+  while (!vl53.dataReady()) {
     if (millis() - startTime > 1000) {
       Serial.println("VL53L1X Timeout.");
       break;
     }
   }
-  distance = vl53.distance();
+
+  if (vl53.dataReady()) {
+    distance = vl53.distance();
+    vl53.clearInterrupt();
+  } else {
+    distance = -1;
+  }
+
   if (distance == -1) {
     Serial.print(F("Couldn't get distance: "));
     Serial.println(vl53.vl_status);
-
   }
 
   adjustedDistance = 500.0 - distance;
@@ -89,12 +102,11 @@ void prepareTxFrame(uint8_t port) {
   humidityBME = bme.readHumidity();
   Serial.printf("Temp: %.2f °C, Humidity: %.2f %%\n", temperatureBME, humidityBME);
 
-
   // Battery
   batteryVoltage = battery.readMillivolts();
   Serial.printf("Battery Voltage: %d mV\n", batteryVoltage);
 
-  // GPS 
+  // GPS
   unsigned long gpsStart = millis();
   bool gpsValid = false;
   while (millis() - gpsStart < 3000) {
@@ -114,9 +126,10 @@ void prepareTxFrame(uint8_t port) {
     latitude = 0;
     longitude = 0;
   }
+
   Serial.println("Sensor reading complete.");
 
-  // ===== Move encoding AFTER sensor update =====
+  // ===== Encode payload =====
   int16_t temp = temperatureBME * 100;
   uint16_t humi = humidityBME * 100;
   int16_t dist = distanceVL;
@@ -128,19 +141,19 @@ void prepareTxFrame(uint8_t port) {
   appData[0] = (temp >> 8) & 0xFF;
   appData[1] = temp & 0xFF;
 
-  //hump
+  // humi
   appData[2] = (humi >> 8) & 0xFF;
   appData[3] = humi & 0xFF;
 
-  //dist
+  // dist
   appData[4] = (dist >> 8) & 0xFF;
   appData[5] = dist & 0xFF;
 
-  //batt
+  // batt
   appData[6] = (batt >> 8) & 0xFF;
   appData[7] = batt & 0xFF;
 
-  //lat
+  // lat
   appData[8]  = (lat >> 24) & 0xFF;
   appData[9]  = (lat >> 16) & 0xFF;
   appData[10] = (lat >> 8) & 0xFF;
@@ -151,28 +164,56 @@ void prepareTxFrame(uint8_t port) {
   appData[13] = (lon >> 16) & 0xFF;
   appData[14] = (lon >> 8) & 0xFF;
   appData[15] = lon & 0xFF;
+
   Serial.println("Payload prepared for LoRaWAN:");
   Serial.printf("Temp: %d, Humi: %d, Dist: %d, Batt: %d, Lat: %.6f, Lon: %.6f\n",
-              temp, humi, dist, batt,
-              latitude, longitude);
+                temp, humi, dist, batt,
+                latitude, longitude);
 }
 
-void setupSensor(){
-  digitalWrite(PIN_VEXT_CTRL, HIGH);
-  delay(60000);
-  //BME
+// ==========================
+// ✅ setupSensor: non-blocking warmup 60s
+// เปิดไฟ -> รอ 60 วิ -> init sensor -> return true
+// ==========================
+bool setupSensor() {
+  // ครั้งแรก: เปิดไฟ + เริ่มจับเวลา
+  if (!sensorWarming) {
+    digitalWrite(PIN_VEXT_CTRL, HIGH);
+    sensorOnTime = millis();
+    sensorWarming = true;
+    Serial.println("Sensor power ON, warming up 60s...");
+    return false;
+  }
+
+  // รอครบ 60 วิ (ไม่ delay)
+  if (millis() - sensorOnTime < 60000) {
+    return false;
+  }
+
+  // ครบ 60 วิแล้ว: init sensor
+  Serial.println("Warming complete, init sensors...");
+
+  // BME
   bme.begin(0x76, wi);
-  //VL53L1X
+
+  // VL53L1X
   vl53.begin(0x29, wi);
-  vl53.VL53L1X_SetROI(5,5);
+  vl53.VL53L1X_SetROI(5, 5);
   vl53.startRanging();
+
+  sensorWarming = false; // reset สำหรับรอบหน้า
+  Serial.println("Sensors ready!");
+  return true;
 }
 
+// ==========================
+// SETUP
+// ==========================
 void setup() {
   boardInit(LORA_DEBUG_ENABLE, LORA_DEBUG_SERIAL_NUM, 115200);
   debug_printf("Booting Mesh Node T114...\n");
 
-  //setup vext_ctrl
+  // setup vext_ctrl
   pinMode(PIN_VEXT_CTRL, OUTPUT);
   digitalWrite(PIN_VEXT_CTRL, HIGH);
 
@@ -189,7 +230,7 @@ void setup() {
 
   // ===== Init VL53L1X =====
   vl53.begin(0x29, wi);
-  vl53.VL53L1X_SetROI(5,5);
+  vl53.VL53L1X_SetROI(5, 5);
   vl53.startRanging();
 
   // ===== Init Battery Monitor =====
@@ -201,15 +242,14 @@ void setup() {
   deviceState = DEVICE_STATE_INIT;
 }
 
+// ==========================
+// LOOP
+// ==========================
 void loop() {
-  
   while (gpsSerial.available()) {
     gps.encode(gpsSerial.read());
   }
 
-  static unsigned long lastTxTime = 0;
-  unsigned long now = millis();
-  
   switch (deviceState) {
     case DEVICE_STATE_INIT:
       LoRaWAN.init(loraWanClass, loraWanRegion);
@@ -222,17 +262,23 @@ void loop() {
       break;
 
     case DEVICE_STATE_SEND:
-      setupSensor();
+      // ✅ รอให้ setupSensor() พร้อมก่อน (เปิดไฟ + รอ 60 วิ)
+      if (!setupSensor()) {
+        break; // ยังไม่ครบเวลา -> อยู่ SEND ต่อ
+      }
+
       prepareTxFrame(appPort);
       LoRaWAN.send();
       deviceState = DEVICE_STATE_CYCLE;
       break;
 
     case DEVICE_STATE_CYCLE:
-      lastTxTime = now;
       txDutyCycleTime = appTxDutyCycle + randr(-APP_TX_DUTYCYCLE_RND, APP_TX_DUTYCYCLE_RND);
       LoRaWAN.cycle(txDutyCycleTime);
+
+      // ปิดไฟหลังส่ง
       digitalWrite(PIN_VEXT_CTRL, LOW);
+
       deviceState = DEVICE_STATE_SLEEP;
       break;
 
