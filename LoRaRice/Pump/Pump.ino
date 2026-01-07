@@ -206,7 +206,7 @@ void setup() {
   Serial.println("Setting up I2C... SCL31 SDA 29");
 
   // ===== Init BME280 =====
-  bme.begin(0x76, wi));
+  bme.begin(0x76, wi);
    
   // ======= Init Batt ========
   battery.begin();
