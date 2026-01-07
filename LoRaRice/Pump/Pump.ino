@@ -206,13 +206,8 @@ void setup() {
   Serial.println("Setting up I2C... SCL31 SDA 29");
 
   // ===== Init BME280 =====
-  Serial.println("Initializing BME280...");
-  if (!bme.begin(0x76, wi)) {
-    Serial.println("[ERROR] BME280 not found at 0x76. Check wiring or address jumper!");
-    while (1) delay(100);
-  }
-  Serial.println("BME280 initialized successfully.");
-
+  bme.begin(0x76, wi));
+   
   // ======= Init Batt ========
   battery.begin();
 
